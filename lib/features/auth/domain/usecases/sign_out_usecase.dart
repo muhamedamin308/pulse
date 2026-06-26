@@ -1,5 +1,7 @@
+import 'package:injectable/injectable.dart';
 import 'package:pulse/features/auth/domain/repositories/auth_repository.dart';
 
+@injectable
 class SignOutUsecase {
   final AuthRepository _authRepository;
 
