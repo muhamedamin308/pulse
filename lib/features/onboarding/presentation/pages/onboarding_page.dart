@@ -21,7 +21,7 @@ class OnboardingPage extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
                       PulseColors.primary,
                       PulseColors.primaryLight,
@@ -45,7 +45,7 @@ class OnboardingPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              Text(
+              const Text(
                 'Welcome to ${PulseConstants.appName}',
                 style: PulseTextStyles.displayMedium,
                 textAlign: TextAlign.center,
@@ -69,7 +69,7 @@ class OnboardingPage extends StatelessWidget {
               ),
               const Spacer(flex: 2),
               // Mood preview chips
-              Wrap(
+              const Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,

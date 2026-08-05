@@ -25,7 +25,7 @@ void main() async {
   );
 
   // Dependency Injection
-  await configureDependencies();
+  configureDependencies();
 
   runApp(const PulseApp());
 }
