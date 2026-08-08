@@ -1,5 +1,5 @@
-// dart format width=80
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// dart format width=80
 
 // **************************************************************************
 // InjectableConfigGenerator
@@ -29,6 +29,7 @@ import '../../features/auth/domain/usecases/sign_in_with_google_usecase.dart'
     as _i673;
 import '../../features/auth/domain/usecases/sign_out_usecase.dart' as _i915;
 import '../../features/auth/domain/usecases/sign_up_usecase.dart' as _i860;
+import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
 import 'firebase_injectable_module.dart' as _i574;
 
 extension GetItInjectableX on _i174.GetIt {
@@ -66,6 +67,13 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
     gh.factory<_i860.SignUpUseCase>(
         () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i52.AuthCubit>(() => _i52.AuthCubit(
+          gh<_i259.SignInUseCase>(),
+          gh<_i860.SignUpUseCase>(),
+          gh<_i673.SignInWithGoogleUseCase>(),
+          gh<_i915.SignOutUsecase>(),
+          gh<_i17.GetCurrentUserUsecase>(),
+        ));
     return this;
   }
 }
