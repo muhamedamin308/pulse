@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive/hive.dart';
 import '../../../../core/constants/pulse_colors.dart';
 import '../../../../core/constants/pulse_text_styles.dart';
 import '../../../../core/constants/pulse_constants.dart';
@@ -41,8 +43,19 @@ class _SplashPageState extends State<SplashPage>
   Future<void> _navigate() async {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    // TODO Phase 2: Check auth state → route to home or onboarding
-    context.goNamed(AppRoutes.onboardingName);
+
+    final box = Hive.box(PulseConstants.settingsBox);
+    final isOnboarded =
+        box.get(PulseConstants.isOnboardedKey, defaultValue: false);
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (!isOnboarded) {
+      context.goNamed(AppRoutes.onboardingName);
+    } else if (currentUser != null) {
+      context.goNamed(AppRoutes.homeName);
+    } else {
+      context.goNamed(AppRoutes.loginName);
+    }
   }
 
   @override

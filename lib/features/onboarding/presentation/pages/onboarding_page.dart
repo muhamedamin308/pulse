@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hive/hive.dart';
+import 'package:pulse/config/router/app_router.dart';
 import '../../../../core/constants/pulse_colors.dart';
 import '../../../../core/constants/pulse_text_styles.dart';
 import '../../../../core/constants/pulse_constants.dart';
@@ -21,7 +24,7 @@ class OnboardingPage extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
                       PulseColors.primary,
                       PulseColors.primaryLight,
@@ -45,7 +48,7 @@ class OnboardingPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              Text(
+              const Text(
                 'Welcome to ${PulseConstants.appName}',
                 style: PulseTextStyles.displayMedium,
                 textAlign: TextAlign.center,
@@ -69,28 +72,51 @@ class OnboardingPage extends StatelessWidget {
               ),
               const Spacer(flex: 2),
               // Mood preview chips
-              Wrap(
+              const Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  _MoodChip(emoji: '😊', label: 'Happy', color: PulseColors.moodHappy),
-                  _MoodChip(emoji: '😢', label: 'Sad', color: PulseColors.moodSad),
-                  _MoodChip(emoji: '🤩', label: 'Excited', color: PulseColors.moodExcited),
-                  _MoodChip(emoji: '😠', label: 'Angry', color: PulseColors.moodAngry),
-                  _MoodChip(emoji: '😰', label: 'Anxious', color: PulseColors.moodAnxious),
-                  _MoodChip(emoji: '😐', label: 'Neutral', color: PulseColors.moodNeutral),
+                  _MoodChip(
+                      emoji: '😊',
+                      label: 'Happy',
+                      color: PulseColors.moodHappy),
+                  _MoodChip(
+                      emoji: '😢', label: 'Sad', color: PulseColors.moodSad),
+                  _MoodChip(
+                      emoji: '🤩',
+                      label: 'Excited',
+                      color: PulseColors.moodExcited),
+                  _MoodChip(
+                      emoji: '😠',
+                      label: 'Angry',
+                      color: PulseColors.moodAngry),
+                  _MoodChip(
+                      emoji: '😰',
+                      label: 'Anxious',
+                      color: PulseColors.moodAnxious),
+                  _MoodChip(
+                      emoji: '😐',
+                      label: 'Neutral',
+                      color: PulseColors.moodNeutral),
                 ],
               ),
               const Spacer(),
-              // TODO Phase 2: Wire to auth navigation
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  final box = Hive.box(PulseConstants.settingsBox);
+                  await box.put(PulseConstants.isOnboardedKey, true);
+                  if (context.mounted) context.goNamed(AppRoutes.registerName);
+                },
                 child: const Text('Get Started'),
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () {},
+                onPressed: () async {
+                  final box = Hive.box(PulseConstants.settingsBox);
+                  await box.put(PulseConstants.isOnboardedKey, true);
+                  if (context.mounted) context.goNamed(AppRoutes.loginName);
+                },
                 child: const Text('I already have an account'),
               ),
               const SizedBox(height: 24),
