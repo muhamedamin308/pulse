@@ -1,5 +1,5 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format width=80
+// GENERATED CODE - DO NOT MODIFY BY HAND
 
 // **************************************************************************
 // InjectableConfigGenerator
@@ -30,6 +30,26 @@ import '../../features/auth/domain/usecases/sign_in_with_google_usecase.dart'
 import '../../features/auth/domain/usecases/sign_out_usecase.dart' as _i915;
 import '../../features/auth/domain/usecases/sign_up_usecase.dart' as _i860;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/friends/data/datasources/friends_remote_data_source.dart'
+    as _i815;
+import '../../features/friends/data/datasources/friends_remote_data_source_impl.dart'
+    as _i862;
+import '../../features/friends/data/repositories/friends_repository_impl.dart'
+    as _i120;
+import '../../features/friends/domain/repository/friends_repository.dart'
+    as _i810;
+import '../../features/friends/domain/usecases/add_friend_usecase.dart'
+    as _i801;
+import '../../features/friends/domain/usecases/get_friend_usecase.dart'
+    as _i710;
+import '../../features/friends/domain/usecases/get_suggested_users_usecase.dart'
+    as _i631;
+import '../../features/friends/domain/usecases/remove_friend_usecase.dart'
+    as _i56;
+import '../../features/friends/domain/usecases/search_users_usecase.dart'
+    as _i252;
+import '../../features/friends/presentation/bloc/friends_cubit.dart' as _i877;
+import '../../features/friends/presentation/bloc/search_cubit.dart' as _i936;
 import 'firebase_injectable_module.dart' as _i574;
 
 extension GetItInjectableX on _i174.GetIt {
@@ -55,8 +75,22 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i974.FirebaseFirestore>(),
           gh<_i116.GoogleSignIn>(),
         ));
+    gh.factory<_i815.FriendsRemoteDataSource>(
+        () => _i862.FriendsRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
     gh.factory<_i787.AuthRepository>(
         () => _i153.AuthRepositoryImpl(gh<_i182.AuthRemoteDataSource>()));
+    gh.factory<_i810.FriendsRepository>(
+        () => _i120.FriendsRepositoryImpl(gh<_i815.FriendsRemoteDataSource>()));
+    gh.factory<_i710.GetFriendUsecase>(
+        () => _i710.GetFriendUsecase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i801.AddFriendUseCase>(
+        () => _i801.AddFriendUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i631.GetSuggestedUsersUseCase>(
+        () => _i631.GetSuggestedUsersUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i56.RemoveFriendUseCase>(
+        () => _i56.RemoveFriendUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i252.SearchUsersUsecase>(
+        () => _i252.SearchUsersUsecase(gh<_i810.FriendsRepository>()));
     gh.factory<_i17.GetCurrentUserUsecase>(
         () => _i17.GetCurrentUserUsecase(gh<_i787.AuthRepository>()));
     gh.factory<_i259.SignInUseCase>(
@@ -67,6 +101,14 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
     gh.factory<_i860.SignUpUseCase>(
         () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i877.FriendsCubit>(() => _i877.FriendsCubit(
+          gh<_i710.GetFriendUsecase>(),
+          gh<_i631.GetSuggestedUsersUseCase>(),
+          gh<_i801.AddFriendUseCase>(),
+          gh<_i56.RemoveFriendUseCase>(),
+        ));
+    gh.factory<_i936.SearchCubit>(
+        () => _i936.SearchCubit(gh<_i252.SearchUsersUsecase>()));
     gh.factory<_i52.AuthCubit>(() => _i52.AuthCubit(
           gh<_i259.SignInUseCase>(),
           gh<_i860.SignUpUseCase>(),
