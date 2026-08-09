@@ -26,6 +26,8 @@ class FriendsRepositoryImpl implements FriendsRepository {
       return await _remoteDataSource.getFriends(userId);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
+    } catch (e) {
+      throw ServerFailure(e.toString());
     }
   }
 

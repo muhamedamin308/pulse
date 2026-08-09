@@ -1,12 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../config/di/injection.dart';
-import '../../features/splash/presentation/pages/splash_page.dart';
-import '../../features/onboarding/presentation/pages/onboarding_page.dart';
-import '../../features/auth/presentation/bloc/auth_cubit.dart';
-import '../../features/auth/presentation/pages/login_page.dart';
-import '../../features/auth/presentation/pages/register_page.dart';
+import 'package:pulse/config/di/injection.dart';
+import 'package:pulse/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:pulse/features/auth/presentation/pages/login_page.dart';
+import 'package:pulse/features/auth/presentation/pages/register_page.dart';
+import 'package:pulse/features/friends/presentation/bloc/friends_cubit.dart';
+import 'package:pulse/features/friends/presentation/bloc/search_cubit.dart';
+import 'package:pulse/features/friends/presentation/pages/search_page.dart';
+import 'package:pulse/features/home/presentation/pages/home_page.dart';
+import 'package:pulse/features/onboarding/presentation/pages/onboarding_page.dart';
+import 'package:pulse/features/splash/presentation/pages/splash_page.dart';
 
 part 'app_routes.dart';
 
@@ -40,15 +43,22 @@ final appRouter = GoRouter(
         child: const RegisterPage(),
       ),
     ),
-    // Placeholder — replace in Phase 3
     GoRoute(
       path: AppRoutes.home,
       name: AppRoutes.homeName,
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Home — Phase 3')),
+      builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: AppRoutes.search,
+      name: AppRoutes.searchName,
+      builder: (context, state) => MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (_) => getIt<SearchCubit>()),
+          BlocProvider.value(value: getIt<FriendsCubit>()),
+        ],
+        child: const SearchPage(),
       ),
     ),
-    // Phase 3: Friends routes
     // Phase 4: Chat routes
   ],
 );
