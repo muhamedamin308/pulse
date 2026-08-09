@@ -15,7 +15,8 @@ Every message in Pulse is tagged with a mood — auto-detected by on-device ML K
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="screenshots/Screenshot_1782329443.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_01.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_02.png" alt="Pulse App Screenshot" width="300"/>`
 </p>
 
 ---
