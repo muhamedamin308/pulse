@@ -11,6 +11,10 @@ class PulseConstants {
   static const groupsCollection = 'groups';
   static const friendRequestsCollection = 'friend_requests';
 
+  // Firestore Fields
+  static const friendsField = 'friends';
+  static const firendsIds = 'friendIds';
+
   // Hive Boxes
   static const userBox = 'user_box';
   static const settingsBox = 'settings_box';
