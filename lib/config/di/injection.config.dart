@@ -30,6 +30,21 @@ import '../../features/auth/domain/usecases/sign_in_with_google_usecase.dart'
 import '../../features/auth/domain/usecases/sign_out_usecase.dart' as _i915;
 import '../../features/auth/domain/usecases/sign_up_usecase.dart' as _i860;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/chat/data/datasources/chat_remote_data_source.dart'
+    as _i980;
+import '../../features/chat/data/datasources/chat_remote_data_source_impl.dart'
+    as _i867;
+import '../../features/chat/data/repositories/chat_repository_impl.dart'
+    as _i504;
+import '../../features/chat/domain/repositories/chat_repository.dart' as _i420;
+import '../../features/chat/domain/usecases/create_chat_usecase.dart' as _i599;
+import '../../features/chat/domain/usecases/delete_message_usecase.dart'
+    as _i481;
+import '../../features/chat/domain/usecases/get_chats_usecase.dart' as _i692;
+import '../../features/chat/domain/usecases/get_messages_usecase.dart' as _i325;
+import '../../features/chat/domain/usecases/mark_messages_as_read_usecase.dart'
+    as _i45;
+import '../../features/chat/domain/usecases/send_message_usecase.dart' as _i795;
 import '../../features/friends/data/datasources/friends_remote_data_source.dart'
     as _i815;
 import '../../features/friends/data/datasources/friends_remote_data_source_impl.dart'
@@ -77,12 +92,16 @@ extension GetItInjectableX on _i174.GetIt {
         ));
     gh.factory<_i815.FriendsRemoteDataSource>(
         () => _i862.FriendsRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
+    gh.factory<_i980.ChatRemoteDataSource>(
+        () => _i867.ChatRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
     gh.factory<_i787.AuthRepository>(
         () => _i153.AuthRepositoryImpl(gh<_i182.AuthRemoteDataSource>()));
     gh.factory<_i810.FriendsRepository>(
         () => _i120.FriendsRepositoryImpl(gh<_i815.FriendsRemoteDataSource>()));
     gh.factory<_i710.GetFriendUsecase>(
         () => _i710.GetFriendUsecase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i420.ChatRepository>(
+        () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()));
     gh.factory<_i801.AddFriendUseCase>(
         () => _i801.AddFriendUseCase(gh<_i810.FriendsRepository>()));
     gh.factory<_i631.GetSuggestedUsersUseCase>(
@@ -101,6 +120,18 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
     gh.factory<_i860.SignUpUseCase>(
         () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i599.CreateChatUseCase>(
+        () => _i599.CreateChatUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i481.DeleteMessageUseCase>(
+        () => _i481.DeleteMessageUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i692.GetChatsUseCase>(
+        () => _i692.GetChatsUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i325.GetMessagesUseCase>(
+        () => _i325.GetMessagesUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i45.MarkMessagesAsReadUseCase>(
+        () => _i45.MarkMessagesAsReadUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i795.SendMessageUseCase>(
+        () => _i795.SendMessageUseCase(gh<_i420.ChatRepository>()));
     gh.factory<_i877.FriendsCubit>(() => _i877.FriendsCubit(
           gh<_i710.GetFriendUsecase>(),
           gh<_i631.GetSuggestedUsersUseCase>(),
