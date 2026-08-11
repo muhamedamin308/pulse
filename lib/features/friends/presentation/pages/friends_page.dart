@@ -209,7 +209,7 @@ class _FriendsPageState extends State<FriendsPage> {
               vertical: 4,
             ),
             decoration: BoxDecoration(
-              color: PulseColors.primary.withOpacity(0.12),
+              color: PulseColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
