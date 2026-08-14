@@ -45,6 +45,8 @@ import '../../features/chat/domain/usecases/get_messages_usecase.dart' as _i325;
 import '../../features/chat/domain/usecases/mark_messages_as_read_usecase.dart'
     as _i45;
 import '../../features/chat/domain/usecases/send_message_usecase.dart' as _i795;
+import '../../features/chat/presentation/bloc/chat_cubit.dart' as _i708;
+import '../../features/chat/presentation/bloc/chats_list_cubit.dart' as _i696;
 import '../../features/friends/data/datasources/friends_remote_data_source.dart'
     as _i815;
 import '../../features/friends/data/datasources/friends_remote_data_source_impl.dart'
@@ -132,6 +134,13 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i45.MarkMessagesAsReadUseCase(gh<_i420.ChatRepository>()));
     gh.factory<_i795.SendMessageUseCase>(
         () => _i795.SendMessageUseCase(gh<_i420.ChatRepository>()));
+    gh.factory<_i708.ChatCubit>(() => _i708.ChatCubit(
+          gh<_i325.GetMessagesUseCase>(),
+          gh<_i795.SendMessageUseCase>(),
+          gh<_i481.DeleteMessageUseCase>(),
+          gh<_i599.CreateChatUseCase>(),
+          gh<_i45.MarkMessagesAsReadUseCase>(),
+        ));
     gh.factory<_i877.FriendsCubit>(() => _i877.FriendsCubit(
           gh<_i710.GetFriendUsecase>(),
           gh<_i631.GetSuggestedUsersUseCase>(),
@@ -140,6 +149,8 @@ extension GetItInjectableX on _i174.GetIt {
         ));
     gh.factory<_i936.SearchCubit>(
         () => _i936.SearchCubit(gh<_i252.SearchUsersUsecase>()));
+    gh.factory<_i696.ChatsListCubit>(
+        () => _i696.ChatsListCubit(gh<_i692.GetChatsUseCase>()));
     gh.factory<_i52.AuthCubit>(() => _i52.AuthCubit(
           gh<_i259.SignInUseCase>(),
           gh<_i860.SignUpUseCase>(),

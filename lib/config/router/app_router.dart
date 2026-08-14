@@ -4,6 +4,8 @@ import 'package:pulse/config/di/injection.dart';
 import 'package:pulse/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:pulse/features/auth/presentation/pages/login_page.dart';
 import 'package:pulse/features/auth/presentation/pages/register_page.dart';
+import 'package:pulse/features/chat/presentation/bloc/chat_cubit.dart';
+import 'package:pulse/features/chat/presentation/pages/chat_page.dart';
 import 'package:pulse/features/friends/presentation/bloc/friends_cubit.dart';
 import 'package:pulse/features/friends/presentation/bloc/search_cubit.dart';
 import 'package:pulse/features/friends/presentation/pages/search_page.dart';
@@ -59,6 +61,20 @@ final appRouter = GoRouter(
         child: const SearchPage(),
       ),
     ),
-    // Phase 4: Chat routes
+    GoRoute(
+      path: AppRoutes.chat,
+      name: AppRoutes.chatName,
+      builder: (context, state) {
+        final chatId = state.pathParameters['chatId']!;
+        final friendName = state.uri.queryParameters['name'] ?? 'Chat';
+        return BlocProvider(
+          create: (_) => getIt<ChatCubit>(),
+          child: ChatPage(
+            chatId: chatId,
+            friendName: friendName,
+          ),
+        );
+      },
+    ),
   ],
 );

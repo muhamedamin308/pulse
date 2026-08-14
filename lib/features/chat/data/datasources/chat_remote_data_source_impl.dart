@@ -15,7 +15,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
   String _generateChatId(String uid1, String uid2) {
     final ids = [uid1, uid2]..sort();
-    return ids.join('-');
+    return ids.join('_');
   }
 
   @override
