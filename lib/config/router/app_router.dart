@@ -5,6 +5,7 @@ import 'package:pulse/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:pulse/features/auth/presentation/pages/login_page.dart';
 import 'package:pulse/features/auth/presentation/pages/register_page.dart';
 import 'package:pulse/features/chat/presentation/bloc/chat_cubit.dart';
+import 'package:pulse/features/chat/presentation/bloc/chats_list_cubit.dart';
 import 'package:pulse/features/chat/presentation/pages/chat_page.dart';
 import 'package:pulse/features/friends/presentation/bloc/friends_cubit.dart';
 import 'package:pulse/features/friends/presentation/bloc/search_cubit.dart';
@@ -48,7 +49,13 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.home,
       name: AppRoutes.homeName,
-      builder: (context, state) => const HomePage(),
+      builder: (context, state) => MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (_) => getIt<FriendsCubit>()),
+          BlocProvider(create: (_) => getIt<ChatsListCubit>()),
+        ],
+        child: const HomePage(),
+      ),
     ),
     GoRoute(
       path: AppRoutes.search,
@@ -66,7 +73,7 @@ final appRouter = GoRouter(
       name: AppRoutes.chatName,
       builder: (context, state) {
         final chatId = state.pathParameters['chatId']!;
-        final friendName = state.uri.queryParameters['name'] ?? 'Chat';
+        final friendName = state.uri.queryParameters['friendName'] ?? '';
         return BlocProvider(
           create: (_) => getIt<ChatCubit>(),
           child: ChatPage(

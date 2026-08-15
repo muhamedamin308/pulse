@@ -19,6 +19,37 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
+  Stream<List<MessageModel>> getMessages(String chatId) {
+    try {
+      return _firestore
+          .collection(PulseConstants.chatsCollection)
+          .doc(chatId)
+          .collection(PulseConstants.messagesCollection)
+          .orderBy('sentAt', descending: false)
+          .snapshots()
+          .map((snap) =>
+              snap.docs.map((doc) => MessageModel.fromFirestore(doc)).toList());
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Stream<List<ChatModel>> getChats(String userId) {
+    try {
+      return _firestore
+          .collection(PulseConstants.chatsCollection)
+          .where('participantIds', arrayContains: userId)
+          .orderBy('lastMessageAt', descending: true)
+          .snapshots()
+          .map((snap) =>
+              snap.docs.map((doc) => ChatModel.fromFirestore(doc)).toList());
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
   Future<String> createChat(String currentUserId, String targetUserId) async {
     try {
       final chatId = _generateChatId(currentUserId, targetUserId);
@@ -45,6 +76,53 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
+  Future<void> sendMessage({
+    required String chatId,
+    required String senderId,
+    required String content,
+    required Mood mood,
+    required bool isMoodOverridden,
+  }) async {
+    try {
+      final chatRef =
+          _firestore.collection(PulseConstants.chatsCollection).doc(chatId);
+
+      final messageRef =
+          chatRef.collection(PulseConstants.messagesCollection).doc();
+
+      final batch = _firestore.batch();
+
+      // Add message
+      batch.set(messageRef, {
+        'senderId': senderId,
+        'content': content,
+        'mood': mood.value,
+        'isMoodOverridden': isMoodOverridden,
+        'type': 'text',
+        'sentAt': Timestamp.fromDate(DateTime.now()),
+        'isRead': false,
+      });
+
+      // Update chat metadata
+      final chatDoc = await chatRef.get();
+      final data = chatDoc.data() as Map<String, dynamic>;
+      final participantIds = List<String>.from(data['participantIds'] ?? []);
+      final otherUserId = participantIds.firstWhere((id) => id != senderId);
+
+      batch.update(chatRef, {
+        'lastMessage': content,
+        'lastMessageMood': mood.value,
+        'lastMessageAt': Timestamp.fromDate(DateTime.now()),
+        'unreadCount.$otherUserId': FieldValue.increment(1),
+      });
+
+      await batch.commit();
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
   Future<void> deleteMessage(String chatId, String messageId) async {
     try {
       await _firestore
@@ -59,40 +137,14 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Stream<List<ChatModel>> getChats(String userId) {
+  Future<void> markMessagesAsRead(String chatId, String userId) async {
     try {
-      return _firestore
+      await _firestore
           .collection(PulseConstants.chatsCollection)
-          .where('participantIds', arrayContains: userId)
-          .orderBy('lastMessageAt', descending: true)
-          .snapshots()
-          .map((snap) =>
-              snap.docs.map((doc) => ChatModel.fromFirestore(doc)).toList());
+          .doc(chatId)
+          .update({'unreadCount.$userId': 0});
     } catch (e) {
       throw ServerException(e.toString());
     }
-  }
-
-  @override
-  Stream<List<MessageModel>> getMessages(String chatId) {
-    // TODO: implement getMessages
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> markMessagesAsRead(String chatId, String userId) {
-    // TODO: implement markMessagesAsRead
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> sendMessage(
-      {required String chatId,
-      required String senderId,
-      required String content,
-      required Mood mood,
-      required bool isMoodOverridden}) {
-    // TODO: implement sendMessage
-    throw UnimplementedError();
   }
 }

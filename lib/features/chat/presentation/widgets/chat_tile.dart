@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';

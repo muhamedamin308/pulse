@@ -6,12 +6,19 @@ import 'package:pulse/features/friends/domain/entities/friend_entity.dart';
 class FriendTile extends StatelessWidget {
   final FriendEntity friend;
   final VoidCallback onRemove;
+  final VoidCallback onTap;
 
-  const FriendTile({super.key, required this.friend, required this.onRemove});
+  const FriendTile({
+    super.key,
+    required this.friend,
+    required this.onRemove,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Stack(
         children: [
@@ -47,12 +54,14 @@ class FriendTile extends StatelessWidget {
       subtitle: Text(
         friend.isOnline ? 'Online' : 'Offline',
         style: PulseTextStyles.bodySmall.copyWith(
-            color: friend.isOnline ? PulseColors.online : PulseColors.offline),
+          color: friend.isOnline ? PulseColors.online : PulseColors.textHint,
+        ),
       ),
       trailing: IconButton(
-          onPressed: onRemove,
-          icon: const Icon(Icons.person_remove_outlined,
-              color: PulseColors.error, size: 20  )),
+        icon: const Icon(Icons.person_remove_outlined,
+            color: PulseColors.error, size: 20),
+        onPressed: onRemove,
+      ),
     );
   }
 }

@@ -21,15 +21,13 @@ class AppRoutes {
   static const home = '/home';
   static const homeName = 'home';
 
-  // Friends — Phase 3
+  // Friends
   static const friends = '/friends';
   static const friendsName = 'friends';
   static const search = '/search';
   static const searchName = 'search';
 
-  // Phase 4: Chat routes
+  // Chat
   static const chat = '/chat/:chatId';
   static const chatName = 'chat';
-  static const group = '/group/:groupId';
-  static const groupName = 'group';
 }
