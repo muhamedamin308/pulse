@@ -84,7 +84,7 @@ class _SplashPageState extends State<SplashPage>
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: PulseColors.primary.withOpacity(0.4),
+                        color: PulseColors.primary.withValues(alpha: 0.4),
                         blurRadius: 30,
                         spreadRadius: 4,
                       ),

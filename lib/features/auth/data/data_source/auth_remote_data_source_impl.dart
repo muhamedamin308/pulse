@@ -115,9 +115,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       rethrow;
     } on FirebaseAuthException catch (e) {
       throw AuthException(e.message ?? 'Google sign-in failed.');
-    } catch (e, stackTrace) {
-      print('GOOGLE SIGN IN ERROR: $e');
-      print('STACK: $stackTrace');
+    } catch (e) {
       throw ServerException(e.toString());
     }
   }

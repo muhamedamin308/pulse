@@ -17,12 +17,10 @@ class PulseTheme {
         primary: PulseColors.primary,
         secondary: PulseColors.primaryLight,
         surface: PulseColors.surface,
-        background: PulseColors.background,
         error: PulseColors.error,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: PulseColors.textPrimary,
-        onBackground: PulseColors.textPrimary,
         onError: Colors.white,
       ),
       appBarTheme: const AppBarTheme(

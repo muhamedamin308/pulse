@@ -37,8 +37,10 @@ class _PulseTextFieldState extends State<PulseTextField> {
             ? IconButton(
                 icon: Icon(
                   _obscure ? Icons.visibility_off : Icons.visibility,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
                   size: 20,
                 ),
                 onPressed: () => setState(() => _obscure = !_obscure),

@@ -8,6 +8,8 @@ import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/friends/presentation/bloc/friends_cubit.dart';
 import 'package:pulse/features/friends/presentation/widgets/friend_tile.dart';
 import 'package:pulse/features/friends/presentation/widgets/suggested_user_tile.dart';
+import 'package:pulse/config/di/injection.dart';
+import 'package:pulse/features/chat/domain/usecases/create_chat_usecase.dart';
 
 class FriendsPage extends StatefulWidget {
   const FriendsPage({super.key});
@@ -131,12 +133,25 @@ class _FriendsPageState extends State<FriendsPage> {
 
                           return FriendTile(
                             friend: friend,
-                            onRemove: () {
-                              context.read<FriendsCubit>().removeFriend(
-                                    currentUserId: _currentUserId,
-                                    targetUserId: friend.uid,
-                                  );
+                            onTap: () async {
+                              final chatId =
+                                  await getIt<CreateChatUseCase>().execute(
+                                currentUserId: _currentUserId,
+                                targetUserId: friend.uid,
+                              );
+                              if (context.mounted) {
+                                context.pushNamed(
+                                  AppRoutes.chatName,
+                                  pathParameters: {'chatId': chatId},
+                                  queryParameters: {'friendName': friend.name},
+                                );
+                              }
                             },
+                            onRemove: () =>
+                                context.read<FriendsCubit>().removeFriend(
+                                      currentUserId: _currentUserId,
+                                      targetUserId: friend.uid,
+                                    ),
                           );
                         },
                       ),
@@ -209,7 +224,7 @@ class _FriendsPageState extends State<FriendsPage> {
               vertical: 4,
             ),
             decoration: BoxDecoration(
-              color: PulseColors.primary.withOpacity(0.12),
+              color: PulseColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -246,7 +261,7 @@ class _FriendsPageState extends State<FriendsPage> {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: PulseColors.primary.withOpacity(0.12),
+                color: PulseColors.primary.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -294,7 +309,7 @@ class _FriendsPageState extends State<FriendsPage> {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: PulseColors.error.withOpacity(0.12),
+                color: PulseColors.error.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: const Icon(

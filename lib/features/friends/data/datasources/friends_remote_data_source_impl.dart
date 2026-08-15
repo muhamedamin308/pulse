@@ -58,8 +58,6 @@ class FriendsRemoteDataSourceImpl implements FriendsRemoteDataSource {
           .map((doc) => FriendModel.fromFirestore(doc))
           .toList();
     } catch (e) {
-      print('FRIENDS ERROR: $e');
-
       throw ServerException(e.toString());
     }
   }
