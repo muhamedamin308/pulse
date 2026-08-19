@@ -3,6 +3,7 @@ import 'package:pulse/core/constants/mood.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/services/mood_detection_service.dart';
 import 'package:pulse/config/di/injection.dart';
+import 'package:pulse/features/chat/presentation/widgets/mood_glow_button.dart';
 import 'package:pulse/features/chat/presentation/widgets/mood_selector.dart';
 
 class ChatInputBar extends StatefulWidget {
@@ -114,34 +115,11 @@ class _ChatInputBarState extends State<ChatInputBar> {
             child: Row(
               children: [
                 // Mood button
-                GestureDetector(
+                MoodGlowButton(
+                  mood: _currentMood,
+                  isActive: _currentMood != Mood.neutral,
                   onTap: () => setState(
                     () => _showMoodSelector = !_showMoodSelector,
-                  ),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: _currentMood.color.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _currentMood.color.withValues(alpha: 0.6),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Center(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        transitionBuilder: (child, animation) =>
-                            ScaleTransition(scale: animation, child: child),
-                        child: Text(
-                          _currentMood.emoji,
-                          key: ValueKey(_currentMood),
-                          style: const TextStyle(fontSize: 20),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
