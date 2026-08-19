@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pulse/core/constants/pulse_constants.dart';
+import 'package:pulse/core/services/notification_service.dart';
 import 'firebase_options.dart';
 import 'config/di/injection.dart';
 import 'config/router/app_router.dart';
@@ -32,6 +33,9 @@ void main() async {
 
   // Dependency Injection
   configureDependencies();
+
+  // Initialize notifications
+  await getIt<NotificationService>().initialize();
 
   runApp(const PulseApp());
 }
