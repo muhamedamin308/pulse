@@ -30,4 +30,12 @@ class AppRoutes {
   // Chat
   static const chat = '/chat/:chatId';
   static const chatName = 'chat';
+
+  // Timeline
+  static const timeline = '/timeline/:chatId';
+  static const timelineName = 'timeline';
+
+  // Profile
+  static const profile = '/profile';
+  static const profileName = 'profile';
 }

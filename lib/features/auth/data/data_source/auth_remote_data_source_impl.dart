@@ -48,6 +48,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         password: password,
       );
       final user = credential.user!;
+      await user.updateDisplayName(name); // ADD THIS
 
       final userModel = UserModel(
         uid: user.uid,
