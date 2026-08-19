@@ -17,6 +17,7 @@ import 'package:injectable/injectable.dart' as _i526;
 
 import '../../core/services/mood_detection_service.dart' as _i719;
 import '../../core/services/notification_service.dart' as _i4;
+import '../../core/services/online_status_service.dart' as _i225;
 import '../../features/auth/data/data_source/auth_remote_data_source.dart'
     as _i182;
 import '../../features/auth/data/data_source/auth_remote_data_source_impl.dart'
@@ -105,6 +106,8 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i719.MoodDetectionService>(
         () => _i719.MoodDetectionService());
     gh.lazySingleton<_i4.NotificationService>(() => _i4.NotificationService());
+    gh.lazySingleton<_i225.OnlineStatusService>(
+        () => _i225.OnlineStatusService());
     gh.factory<_i182.AuthRemoteDataSource>(() => _i508.AuthRemoteDataSourceImpl(
           gh<_i59.FirebaseAuth>(),
           gh<_i974.FirebaseFirestore>(),

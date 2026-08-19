@@ -77,11 +77,13 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final chatId = state.pathParameters['chatId']!;
         final friendName = state.uri.queryParameters['friendName'] ?? '';
+        final friendId = state.uri.queryParameters['friendId'] ?? '';
         return BlocProvider(
           create: (_) => getIt<ChatCubit>(),
           child: ChatPage(
             chatId: chatId,
             friendName: friendName,
+            friendId: friendId,
           ),
         );
       },
