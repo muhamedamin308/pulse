@@ -12,7 +12,10 @@ import 'package:pulse/features/friends/presentation/bloc/search_cubit.dart';
 import 'package:pulse/features/friends/presentation/pages/search_page.dart';
 import 'package:pulse/features/home/presentation/pages/home_page.dart';
 import 'package:pulse/features/onboarding/presentation/pages/onboarding_page.dart';
+import 'package:pulse/features/profile/presentation/pages/profile_page.dart';
 import 'package:pulse/features/splash/presentation/pages/splash_page.dart';
+import 'package:pulse/features/timeline/presentation/bloc/timeline_cubit.dart';
+import 'package:pulse/features/timeline/presentation/page/timeline_page.dart';
 
 part 'app_routes.dart';
 
@@ -82,6 +85,26 @@ final appRouter = GoRouter(
           ),
         );
       },
+    ),
+    GoRoute(
+      path: AppRoutes.timeline,
+      name: AppRoutes.timelineName,
+      builder: (context, state) {
+        final chatId = state.pathParameters['chatId']!;
+        final friendName = state.uri.queryParameters['friendName'] ?? '';
+        return BlocProvider(
+          create: (_) => getIt<TimelineCubit>(),
+          child: TimelinePage(
+            chatId: chatId,
+            friendName: friendName,
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.profile,
+      name: AppRoutes.profileName,
+      builder: (context, state) => const ProfilePage(),
     ),
   ],
 );

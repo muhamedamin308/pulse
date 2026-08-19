@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -105,31 +106,39 @@ class _ChatsPageState extends State<ChatsPage> {
                     orElse: () => '',
                   );
 
-                  if (friendId.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
+                  if (friendId.isEmpty) return const SizedBox.shrink();
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: PulseColors.surface,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: ChatTile(
-                      chat: chat,
-                      currentUserId: _currentUserId,
-                      friendName: friendId,
-                      onTap: () {
-                        context.pushNamed(
-                          AppRoutes.chatName,
-                          pathParameters: {
-                            'chatId': chat.id,
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(friendId)
+                        .get(),
+                    builder: (context, snapshot) {
+                      final data =
+                          snapshot.data?.data() as Map<String, dynamic>?;
+                      final friendName = data?['name'] ?? 'Unknown';
+                      final friendPhotoUrl = data?['photoUrl'] as String?;
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: PulseColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: ChatTile(
+                          chat: chat,
+                          currentUserId: _currentUserId,
+                          friendName: friendName,
+                          friendPhotoUrl: friendPhotoUrl,
+                          onTap: () {
+                            context.pushNamed(
+                              AppRoutes.chatName,
+                              pathParameters: {'chatId': chat.id},
+                              queryParameters: {'friendName': friendName},
+                            );
                           },
-                          queryParameters: {
-                            'name': friendId,
-                          },
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

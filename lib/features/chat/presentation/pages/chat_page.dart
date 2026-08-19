@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/chat/presentation/bloc/chat_cubit.dart';
@@ -112,58 +114,18 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: PulseColors.background,
       appBar: AppBar(
-        backgroundColor: PulseColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: PulseColors.textPrimary,
+        title: Text(widget.friendName),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.insights_rounded),
+            onPressed: () => context.pushNamed(
+              AppRoutes.timelineName,
+              pathParameters: {'chatId': widget.chatId},
+              queryParameters: {'friendName': widget.friendName},
+            ),
           ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: PulseColors.primary.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: PulseColors.primary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.friendName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: PulseTextStyles.bodyMedium.copyWith(
-                      color: PulseColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    'Conversation',
-                    style: PulseTextStyles.bodyMedium.copyWith(
-                      color: PulseColors.textHint,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
       body: Column(
         children: [
