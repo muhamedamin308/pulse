@@ -68,6 +68,18 @@ import '../../features/friends/domain/usecases/search_users_usecase.dart'
     as _i252;
 import '../../features/friends/presentation/bloc/friends_cubit.dart' as _i877;
 import '../../features/friends/presentation/bloc/search_cubit.dart' as _i936;
+import '../../features/timeline/data/datasource/timeline_remote_datasource.dart'
+    as _i112;
+import '../../features/timeline/data/datasource/timeline_remote_datasource_impl.dart'
+    as _i517;
+import '../../features/timeline/data/datasource/timeline_repository_impl.dart'
+    as _i816;
+import '../../features/timeline/domain/repositories/timeline_repository.dart'
+    as _i300;
+import '../../features/timeline/domain/usecase/get_mood_frequency_usecase.dart'
+    as _i429;
+import '../../features/timeline/domain/usecase/get_timeline_conversation_usecase.dart'
+    as _i206;
 import 'firebase_injectable_module.dart' as _i574;
 
 extension GetItInjectableX on _i174.GetIt {
@@ -95,6 +107,8 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i974.FirebaseFirestore>(),
           gh<_i116.GoogleSignIn>(),
         ));
+    gh.factory<_i112.TimelineRemoteDataSource>(() =>
+        _i517.TimelineRemoteDatasourceImpl(gh<_i974.FirebaseFirestore>()));
     gh.factory<_i815.FriendsRemoteDataSource>(
         () => _i862.FriendsRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
     gh.factory<_i980.ChatRemoteDataSource>(
@@ -105,6 +119,12 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i120.FriendsRepositoryImpl(gh<_i815.FriendsRemoteDataSource>()));
     gh.factory<_i710.GetFriendUsecase>(
         () => _i710.GetFriendUsecase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i300.TimelineRepository>(() =>
+        _i816.TimelineRepositoryImpl(gh<_i112.TimelineRemoteDataSource>()));
+    gh.factory<_i429.GetMoodFrequencyUseCase>(
+        () => _i429.GetMoodFrequencyUseCase(gh<_i300.TimelineRepository>()));
+    gh.factory<_i206.GetConversationTimelineUseCase>(() =>
+        _i206.GetConversationTimelineUseCase(gh<_i300.TimelineRepository>()));
     gh.factory<_i420.ChatRepository>(
         () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()));
     gh.factory<_i801.AddFriendUseCase>(
