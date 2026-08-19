@@ -80,6 +80,7 @@ import '../../features/timeline/domain/usecase/get_mood_frequency_usecase.dart'
     as _i429;
 import '../../features/timeline/domain/usecase/get_timeline_conversation_usecase.dart'
     as _i206;
+import '../../features/timeline/presentation/bloc/timeline_cubit.dart' as _i990;
 import 'firebase_injectable_module.dart' as _i574;
 
 extension GetItInjectableX on _i174.GetIt {
@@ -145,6 +146,8 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
     gh.factory<_i860.SignUpUseCase>(
         () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i990.TimelineCubit>(
+        () => _i990.TimelineCubit(gh<_i206.GetConversationTimelineUseCase>()));
     gh.factory<_i599.CreateChatUseCase>(
         () => _i599.CreateChatUseCase(gh<_i420.ChatRepository>()));
     gh.factory<_i481.DeleteMessageUseCase>(
