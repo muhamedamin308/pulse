@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
+import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_constants.dart';
 
 @pragma('vm:entry-point')
@@ -73,9 +74,20 @@ class NotificationService {
 
   void _handleNotificationTap(RemoteMessage message) {
     final chatId = message.data['chatId'];
-    // final friendName = message.data['friendName'] ?? '';
-    debugPrint('Notification tapped - chatId: $chatId');
-    // Navigation handled via navigatorKey in phase 7 step 3
+    final friendName = message.data['friendName'] ?? '';
+    final senderId = message.data['senderId'] ?? '';
+
+    if (chatId == null) return;
+
+    // Navigate to chat
+    appRouter.pushNamed(
+      AppRoutes.chatName,
+      pathParameters: {'chatId': chatId},
+      queryParameters: {
+        'friendName': friendName,
+        'friendId': senderId,
+      },
+    );
   }
 
   Future<void> deleteToken() async {

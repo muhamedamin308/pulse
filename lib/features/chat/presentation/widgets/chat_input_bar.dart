@@ -50,11 +50,11 @@ class _ChatInputBarState extends State<ChatInputBar> {
       return;
     }
 
-    // Debounce — wait 500ms after user stops typing
+    // Debounce — wait 1s after user stops typing before calling Gemini API
     _lastTyped = DateTime.now();
     final capturedTime = _lastTyped;
 
-    Future.delayed(const Duration(milliseconds: 500), () async {
+    Future.delayed(const Duration(milliseconds: 1000), () async {
       if (_lastTyped != capturedTime) return; // user kept typing
       if (!mounted) return;
 

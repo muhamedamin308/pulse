@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:injectable/injectable.dart';
 
 @module
@@ -13,4 +14,7 @@ abstract class FirebaseInjectableModule {
 
   @lazySingleton
   GoogleSignIn get googleSignIn => GoogleSignIn();
+
+  @lazySingleton
+  http.Client get httpClient => http.Client();
 }

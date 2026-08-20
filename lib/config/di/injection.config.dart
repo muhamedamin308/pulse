@@ -13,8 +13,10 @@ import 'package:cloud_firestore/cloud_firestore.dart' as _i974;
 import 'package:firebase_auth/firebase_auth.dart' as _i59;
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:google_sign_in/google_sign_in.dart' as _i116;
+import 'package:http/http.dart' as _i519;
 import 'package:injectable/injectable.dart' as _i526;
 
+import '../../core/services/fcm_notification_service.dart' as _i928;
 import '../../core/services/mood_detection_service.dart' as _i719;
 import '../../core/services/notification_service.dart' as _i4;
 import '../../core/services/online_status_service.dart' as _i225;
@@ -103,8 +105,9 @@ extension GetItInjectableX on _i174.GetIt {
         () => firebaseInjectableModule.firestore);
     gh.lazySingleton<_i116.GoogleSignIn>(
         () => firebaseInjectableModule.googleSignIn);
-    gh.lazySingleton<_i719.MoodDetectionService>(
-        () => _i719.MoodDetectionService());
+    gh.lazySingleton<_i519.Client>(() => firebaseInjectableModule.httpClient);
+    gh.lazySingleton<_i928.FcmNotificationService>(
+        () => _i928.FcmNotificationService());
     gh.lazySingleton<_i4.NotificationService>(() => _i4.NotificationService());
     gh.lazySingleton<_i225.OnlineStatusService>(
         () => _i225.OnlineStatusService());
@@ -113,46 +116,24 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i974.FirebaseFirestore>(),
           gh<_i116.GoogleSignIn>(),
         ));
+    gh.factory<_i980.ChatRemoteDataSource>(() => _i867.ChatRemoteDataSourceImpl(
+          gh<_i974.FirebaseFirestore>(),
+          gh<_i928.FcmNotificationService>(),
+        ));
+    gh.lazySingleton<_i719.MoodDetectionService>(
+        () => _i719.MoodDetectionService(client: gh<_i519.Client>()));
     gh.factory<_i112.TimelineRemoteDataSource>(() =>
         _i517.TimelineRemoteDatasourceImpl(gh<_i974.FirebaseFirestore>()));
+    gh.factory<_i420.ChatRepository>(
+        () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()));
     gh.factory<_i815.FriendsRemoteDataSource>(
         () => _i862.FriendsRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
-    gh.factory<_i980.ChatRemoteDataSource>(
-        () => _i867.ChatRemoteDataSourceImpl(gh<_i974.FirebaseFirestore>()));
     gh.factory<_i787.AuthRepository>(
         () => _i153.AuthRepositoryImpl(gh<_i182.AuthRemoteDataSource>()));
     gh.factory<_i810.FriendsRepository>(
         () => _i120.FriendsRepositoryImpl(gh<_i815.FriendsRemoteDataSource>()));
     gh.factory<_i710.GetFriendUsecase>(
         () => _i710.GetFriendUsecase(gh<_i810.FriendsRepository>()));
-    gh.factory<_i300.TimelineRepository>(() =>
-        _i816.TimelineRepositoryImpl(gh<_i112.TimelineRemoteDataSource>()));
-    gh.factory<_i429.GetMoodFrequencyUseCase>(
-        () => _i429.GetMoodFrequencyUseCase(gh<_i300.TimelineRepository>()));
-    gh.factory<_i206.GetConversationTimelineUseCase>(() =>
-        _i206.GetConversationTimelineUseCase(gh<_i300.TimelineRepository>()));
-    gh.factory<_i420.ChatRepository>(
-        () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()));
-    gh.factory<_i801.AddFriendUseCase>(
-        () => _i801.AddFriendUseCase(gh<_i810.FriendsRepository>()));
-    gh.factory<_i631.GetSuggestedUsersUseCase>(
-        () => _i631.GetSuggestedUsersUseCase(gh<_i810.FriendsRepository>()));
-    gh.factory<_i56.RemoveFriendUseCase>(
-        () => _i56.RemoveFriendUseCase(gh<_i810.FriendsRepository>()));
-    gh.factory<_i252.SearchUsersUsecase>(
-        () => _i252.SearchUsersUsecase(gh<_i810.FriendsRepository>()));
-    gh.factory<_i17.GetCurrentUserUsecase>(
-        () => _i17.GetCurrentUserUsecase(gh<_i787.AuthRepository>()));
-    gh.factory<_i259.SignInUseCase>(
-        () => _i259.SignInUseCase(gh<_i787.AuthRepository>()));
-    gh.factory<_i673.SignInWithGoogleUseCase>(
-        () => _i673.SignInWithGoogleUseCase(gh<_i787.AuthRepository>()));
-    gh.factory<_i915.SignOutUsecase>(
-        () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
-    gh.factory<_i860.SignUpUseCase>(
-        () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
-    gh.factory<_i990.TimelineCubit>(
-        () => _i990.TimelineCubit(gh<_i206.GetConversationTimelineUseCase>()));
     gh.factory<_i599.CreateChatUseCase>(
         () => _i599.CreateChatUseCase(gh<_i420.ChatRepository>()));
     gh.factory<_i481.DeleteMessageUseCase>(
@@ -172,6 +153,34 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i599.CreateChatUseCase>(),
           gh<_i45.MarkMessagesAsReadUseCase>(),
         ));
+    gh.factory<_i300.TimelineRepository>(() =>
+        _i816.TimelineRepositoryImpl(gh<_i112.TimelineRemoteDataSource>()));
+    gh.factory<_i429.GetMoodFrequencyUseCase>(
+        () => _i429.GetMoodFrequencyUseCase(gh<_i300.TimelineRepository>()));
+    gh.factory<_i206.GetConversationTimelineUseCase>(() =>
+        _i206.GetConversationTimelineUseCase(gh<_i300.TimelineRepository>()));
+    gh.factory<_i801.AddFriendUseCase>(
+        () => _i801.AddFriendUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i631.GetSuggestedUsersUseCase>(
+        () => _i631.GetSuggestedUsersUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i56.RemoveFriendUseCase>(
+        () => _i56.RemoveFriendUseCase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i252.SearchUsersUsecase>(
+        () => _i252.SearchUsersUsecase(gh<_i810.FriendsRepository>()));
+    gh.factory<_i696.ChatsListCubit>(
+        () => _i696.ChatsListCubit(gh<_i692.GetChatsUseCase>()));
+    gh.factory<_i17.GetCurrentUserUsecase>(
+        () => _i17.GetCurrentUserUsecase(gh<_i787.AuthRepository>()));
+    gh.factory<_i259.SignInUseCase>(
+        () => _i259.SignInUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i673.SignInWithGoogleUseCase>(
+        () => _i673.SignInWithGoogleUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i915.SignOutUsecase>(
+        () => _i915.SignOutUsecase(gh<_i787.AuthRepository>()));
+    gh.factory<_i860.SignUpUseCase>(
+        () => _i860.SignUpUseCase(gh<_i787.AuthRepository>()));
+    gh.factory<_i990.TimelineCubit>(
+        () => _i990.TimelineCubit(gh<_i206.GetConversationTimelineUseCase>()));
     gh.factory<_i877.FriendsCubit>(() => _i877.FriendsCubit(
           gh<_i710.GetFriendUsecase>(),
           gh<_i631.GetSuggestedUsersUseCase>(),
@@ -180,8 +189,6 @@ extension GetItInjectableX on _i174.GetIt {
         ));
     gh.factory<_i936.SearchCubit>(
         () => _i936.SearchCubit(gh<_i252.SearchUsersUsecase>()));
-    gh.factory<_i696.ChatsListCubit>(
-        () => _i696.ChatsListCubit(gh<_i692.GetChatsUseCase>()));
     gh.factory<_i52.AuthCubit>(() => _i52.AuthCubit(
           gh<_i259.SignInUseCase>(),
           gh<_i860.SignUpUseCase>(),
