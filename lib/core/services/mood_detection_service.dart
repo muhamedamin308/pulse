@@ -1,18 +1,448 @@
+import 'dart:convert';
+import 'dart:developer';
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:injectable/injectable.dart';
 import 'package:pulse/core/constants/mood.dart';
 
 class MoodKeyword {
   final String phrase;
   final double weight;
-
   const MoodKeyword(this.phrase, this.weight);
 }
 
 @lazySingleton
 class MoodDetectionService {
-  // ---------------------------------------------------------------------------
-  // EXCITED
-  // ---------------------------------------------------------------------------
+  final http.Client _client;
+
+  MoodDetectionService({http.Client? client})
+      : _client = client ?? http.Client();
+
+  // Simple LRU cache
+  final Map<String, Mood> _cache = {};
+  static const int _maxCacheSize = 100;
+
+  // ─── Confidence thresholds ────────────────────────────────────────────────
+  // If keyword score >= _highConfidenceThreshold → return immediately
+  // If keyword score >= _lowConfidenceThreshold  → return without calling AI
+  // If keyword score <  _lowConfidenceThreshold  → call Gemini as fallback
+  static const double _highConfidenceThreshold = 2.0;
+  static const double _lowConfidenceThreshold = 0.8;
+
+  static const String _systemPrompt = '''
+You are a mood classifier for a chat messaging app.
+Classify the given message into EXACTLY ONE of these moods: happy, sad, angry, anxious, excited, neutral.
+Respond ONLY with the single mood word in lowercase.
+Do NOT use markdown, punctuation, colons, asterisks, or any extra text.
+Your entire response must be a single word only.
+
+Examples:
+- "انا زعلان" -> sad
+- "I'm so happy" -> happy
+- "مش طايق نفسي" -> angry
+- "خايف من الامتحان" -> anxious
+- "مش مصدق واخيرااا" -> excited
+- "ازيك عامل ايه" -> neutral
+- "حزين" -> sad
+- "I'm not happy" -> sad
+- "don't worry about it" -> neutral
+''';
+
+  // ─── PUBLIC API ───────────────────────────────────────────────────────────
+
+  Future<Mood> detectMood(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return Mood.neutral;
+
+    final cacheKey = trimmed.toLowerCase();
+
+    // Cache hit
+    if (_cache.containsKey(cacheKey)) {
+      log('⚡ Cache hit: "$trimmed"', name: 'MoodDetection');
+      return _cache[cacheKey]!;
+    }
+
+    final stopwatch = Stopwatch()..start();
+
+    // Step 1 — Keyword scoring
+    final scores = _scoreAll(trimmed);
+    print('📊 Scores: $scores');
+
+    final bestEntry =
+        scores.entries.reduce((a, b) => a.value > b.value ? a : b);
+    final bestMood = bestEntry.key;
+    final bestScore = bestEntry.value;
+
+    // Step 2 — High confidence → return immediately
+    if (bestScore >= _highConfidenceThreshold) {
+      stopwatch.stop();
+      log('✅ High-confidence: $bestMood (${bestScore.toStringAsFixed(2)}) in ${stopwatch.elapsedMilliseconds}ms',
+          name: 'MoodDetection');
+      _addToCache(cacheKey, bestMood);
+      return bestMood;
+    }
+
+    // Step 3 — Low confidence → return keyword result
+    if (bestScore >= _lowConfidenceThreshold) {
+      stopwatch.stop();
+      log('✅ Low-confidence: $bestMood (${bestScore.toStringAsFixed(2)}) in ${stopwatch.elapsedMilliseconds}ms',
+          name: 'MoodDetection');
+      _addToCache(cacheKey, bestMood);
+      return bestMood;
+    }
+
+    // Step 4 — No signal → Gemini fallback
+    log('🤖 No keyword signal — calling Gemini for: "$trimmed"',
+        name: 'MoodDetection');
+
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey.isEmpty || apiKey == 'your_gemini_api_key_here') {
+      stopwatch.stop();
+      log('⚠️ No API key — returning neutral', name: 'MoodDetection');
+      return Mood.neutral;
+    }
+
+    try {
+      final aiMood = await _callGemini(trimmed, apiKey)
+          .timeout(const Duration(seconds: 3));
+      stopwatch.stop();
+      final result = aiMood ?? Mood.neutral;
+      log('🎯 Gemini result: $result in ${stopwatch.elapsedMilliseconds}ms',
+          name: 'MoodDetection');
+      _addToCache(cacheKey, result);
+      return result;
+    } catch (e) {
+      stopwatch.stop();
+      log('❌ Gemini failed after ${stopwatch.elapsedMilliseconds}ms: $e',
+          name: 'MoodDetection');
+      return Mood.neutral;
+    }
+  }
+
+  // ─── KEYWORD SCORING ─────────────────────────────────────────────────────
+
+  Map<Mood, double> _scoreAll(String text) {
+    final normalized = normalizeText(text);
+
+    final scores = <Mood, double>{
+      Mood.excited: _scoreKeywords(normalized, excitedKeywords) +
+          _scoreEmojis(text, excitedEmojis),
+      Mood.happy: _scoreKeywords(normalized, happyKeywords) +
+          _scoreEmojis(text, happyEmojis),
+      Mood.sad: _scoreKeywords(normalized, sadKeywords) +
+          _scoreEmojis(text, sadEmojis),
+      Mood.angry: _scoreKeywords(normalized, angryKeywords) +
+          _scoreEmojis(text, angryEmojis),
+      Mood.anxious: _scoreKeywords(normalized, anxiousKeywords) +
+          _scoreEmojis(text, anxiousEmojis),
+      Mood.neutral: 0,
+    };
+
+    // Punctuation boosts
+    final exclamationCount = '!'.allMatches(text).length;
+    final questionCount = '?'.allMatches(text).length;
+
+    if (exclamationCount > 0) {
+      scores[Mood.excited] =
+          (scores[Mood.excited] ?? 0) + (exclamationCount >= 3 ? 0.8 : 0.3);
+      scores[Mood.happy] =
+          (scores[Mood.happy] ?? 0) + (exclamationCount >= 3 ? 0.3 : 0.1);
+      if (exclamationCount >= 2) {
+        scores[Mood.angry] = (scores[Mood.angry] ?? 0) + 0.2;
+      }
+    }
+
+    if (questionCount >= 2) {
+      scores[Mood.anxious] = (scores[Mood.anxious] ?? 0) + 0.3;
+    }
+
+    // Uppercase boost
+    final uppercaseRatio = _uppercaseRatio(text);
+    if (uppercaseRatio >= 0.65 && text.length >= 6) {
+      scores[Mood.excited] = (scores[Mood.excited] ?? 0) + 0.3;
+      scores[Mood.angry] = (scores[Mood.angry] ?? 0) + 0.2;
+    }
+
+    // Negation handling
+    _applyNegation(normalized, scores);
+
+    return scores;
+  }
+
+  double _scoreKeywords(String normalizedText, List<MoodKeyword> keywords) {
+    double score = 0;
+    for (final keyword in keywords) {
+      final normalizedKeyword = normalizeText(keyword.phrase);
+      if (normalizedKeyword.isEmpty) continue;
+      if (normalizedText.contains(normalizedKeyword)) {
+        score += keyword.weight;
+      }
+    }
+    return score;
+  }
+
+  double _scoreEmojis(String originalText, List<MoodKeyword> emojis) {
+    double score = 0;
+    for (final emoji in emojis) {
+      if (originalText.contains(emoji.phrase)) {
+        score += emoji.weight;
+      }
+    }
+    return score;
+  }
+
+  // ─── GEMINI FALLBACK ─────────────────────────────────────────────────────
+
+  Future<Mood?> _callGemini(String message, String apiKey) async {
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$apiKey',
+    );
+
+    final payload = {
+      'system_instruction': {
+        'parts': [
+          {'text': _systemPrompt}
+        ]
+      },
+      'contents': [
+        {
+          'parts': [
+            {'text': message}
+          ]
+        }
+      ],
+      'generationConfig': {
+        'temperature': 0.0,
+        'maxOutputTokens': 5,
+        'stopSequences': ['\n', '.', ',', ':'],
+      },
+    };
+
+    final response = await _client.post(
+      url,
+      headers: {'Content-Type': 'application/json; charset=utf-8'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final candidates = data['candidates'] as List<dynamic>?;
+      if (candidates != null && candidates.isNotEmpty) {
+        final content = candidates.first['content'] as Map<String, dynamic>?;
+        final parts = content?['parts'] as List<dynamic>?;
+        if (parts != null && parts.isNotEmpty) {
+          final rawText = parts.first['text'] as String? ?? '';
+          return _parseMood(rawText.trim().toLowerCase());
+        }
+      }
+    }
+    return null;
+  }
+
+  Mood _parseMood(String response) {
+    final cleaned = response.replaceAll(RegExp(r'[^a-z]'), '');
+
+    switch (cleaned) {
+      case 'happy':
+        return Mood.happy;
+      case 'sad':
+        return Mood.sad;
+      case 'angry':
+        return Mood.angry;
+      case 'anxious':
+        return Mood.anxious;
+      case 'excited':
+        return Mood.excited;
+      case 'neutral':
+        return Mood.neutral;
+    }
+
+    // Partial match
+    for (final mood in Mood.values) {
+      if (cleaned.contains(mood.name)) return mood;
+    }
+
+    // Raw match before cleaning
+    for (final mood in Mood.values) {
+      if (response.contains(mood.name)) return mood;
+    }
+
+    return Mood.neutral;
+  }
+
+  // ─── NEGATION ────────────────────────────────────────────────────────────
+
+  void _applyNegation(String text, Map<Mood, double> score) {
+    final positiveNegations = [
+      'not happy',
+      'not good',
+      'not nice',
+      'not great',
+      'not feeling good',
+      'not feeling great',
+      'dont like',
+      "don't like",
+      'do not like',
+      'dont love',
+      "don't love",
+      'do not love',
+      'not excited',
+      'not amazing',
+      'not okay actually',
+      'not fine',
+      'not proud',
+      'not comfortable',
+      'مش مبسوط',
+      'مش مبسوطه',
+      'مش سعيد',
+      'مش سعيده',
+      'مش فرحان',
+      'مش فرحانه',
+      'مش كويس',
+      'مش كويسه',
+      'مش تمام',
+      'مش متحمس',
+      'مش متحمسه',
+    ];
+
+    final sadNegations = [
+      'not sad',
+      'not unhappy',
+      'not lonely',
+      'not crying',
+      'not depressed',
+      'not miserable',
+      'not hopeless',
+      'مش حزين',
+      'مش حزينه',
+      'مش زعلان',
+      'مش زعلانه',
+      'مش وحيد',
+      'مش وحيده',
+      'مش بعيط',
+      'مش مكتئب',
+      'مش مكتئبه',
+    ];
+
+    final anxiousNegations = [
+      'not worried',
+      'not anxious',
+      'not scared',
+      'not afraid',
+      'not nervous',
+      'not stressed',
+      'not panicking',
+      'dont worry',
+      "don't worry",
+      'do not worry',
+      'مش قلقان',
+      'مش قلقانه',
+      'مش خايف',
+      'مش خايفه',
+      'مش متوتر',
+      'مش متوتره',
+    ];
+
+    final angryNegations = [
+      'not angry',
+      'not mad',
+      'not furious',
+      'not upset',
+      'not annoyed',
+      'مش عصبي',
+      'مش عصبيه',
+      'مش غاضب',
+      'مش غاضبه',
+    ];
+
+    for (final phrase in positiveNegations) {
+      if (text.contains(normalizeText(phrase))) {
+        score[Mood.happy] = (score[Mood.happy] ?? 0) * 0.25;
+        score[Mood.excited] = (score[Mood.excited] ?? 0) * 0.35;
+        score[Mood.sad] = (score[Mood.sad] ?? 0) + 0.4;
+      }
+    }
+    for (final phrase in sadNegations) {
+      if (text.contains(normalizeText(phrase))) {
+        score[Mood.sad] = (score[Mood.sad] ?? 0) * 0.25;
+      }
+    }
+    for (final phrase in anxiousNegations) {
+      if (text.contains(normalizeText(phrase))) {
+        score[Mood.anxious] = (score[Mood.anxious] ?? 0) * 0.25;
+      }
+    }
+    for (final phrase in angryNegations) {
+      if (text.contains(normalizeText(phrase))) {
+        score[Mood.angry] = (score[Mood.angry] ?? 0) * 0.25;
+      }
+    }
+  }
+
+  // ─── UPPERCASE ───────────────────────────────────────────────────────────
+
+  double _uppercaseRatio(String text) {
+    final letters = text.runes
+        .map(String.fromCharCode)
+        .where((char) => RegExp(r'[A-Za-z]').hasMatch(char))
+        .toList();
+    if (letters.isEmpty) return 0;
+    final uppercase =
+        letters.where((char) => char == char.toUpperCase()).length;
+    return uppercase / letters.length;
+  }
+
+  // ─── NORMALIZATION ───────────────────────────────────────────────────────
+
+  String normalizeText(String input) {
+    var text = input.toLowerCase().trim();
+
+    text = text
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ٱ', 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي');
+
+    text = text.replaceAll(RegExp(r'[\u064B-\u065F\u0670]'), '');
+    text = text.replaceAll('ـ', '');
+
+    text = text
+        .replaceAll('،', ' ')
+        .replaceAll('؛', ' ')
+        .replaceAll('؟', ' ')
+        .replaceAll('«', ' ')
+        .replaceAll('»', ' ')
+        .replaceAll('"', ' ')
+        .replaceAll('"', ' ')
+        .replaceAll(''', "'")
+        .replaceAll(''', "'");
+
+    text = text.replaceAll(RegExp(r'(.)\1{2,}'), r'$1$1');
+
+    text = text.replaceAll(RegExp(r"[^\u0600-\u06FFa-z0-9\s']"), ' ');
+
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+
+    return text.trim();
+  }
+
+  // ─── CACHE ───────────────────────────────────────────────────────────────
+
+  void _addToCache(String key, Mood mood) {
+    if (_cache.length >= _maxCacheSize) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = mood;
+  }
+
+  void clearCache() => _cache.clear();
+
+  // ─── KEYWORDS (paste your full lists here) ────────────────────────────────
 
   static const excitedKeywords = <MoodKeyword>[
     // English - single words
@@ -70,6 +500,37 @@ class MoodDetectionService {
     MoodKeyword('yass', 2.0),
     MoodKeyword('yasss', 2.0),
     MoodKeyword('letsgo', 2.0),
+    // English - single words (expanded)
+    MoodKeyword('buzzing', 1.8),
+    MoodKeyword('geeked', 2.0),
+    MoodKeyword('amped', 2.0),
+    MoodKeyword('unreal', 1.8),
+    MoodKeyword('rad', 1.5),
+    MoodKeyword('killer', 1.5),
+    MoodKeyword('banger', 1.8),
+    MoodKeyword('slaps', 1.8),
+    MoodKeyword('iconic', 1.5),
+    MoodKeyword('sensational', 2.0),
+    MoodKeyword('remarkable', 1.5),
+    MoodKeyword('astonishing', 2.0),
+    MoodKeyword('astounding', 2.0),
+    MoodKeyword('breathtaking', 2.0),
+    MoodKeyword('dazzling', 1.8),
+    MoodKeyword('thrilling', 2.0),
+    MoodKeyword('exhilarating', 2.2),
+    MoodKeyword('electrifying', 2.0),
+    MoodKeyword('invigorating', 1.8),
+    MoodKeyword('energized', 1.8),
+    MoodKeyword('giddy', 2.0),
+    MoodKeyword('yippee', 2.0),
+    MoodKeyword('hooray', 2.0),
+    MoodKeyword('hurray', 2.0),
+    MoodKeyword('bingo', 1.5),
+    MoodKeyword('jackpot', 1.8),
+    MoodKeyword('boom', 1.3),
+    MoodKeyword('yeehaw', 1.8),
+    MoodKeyword('milestone', 1.5),
+    MoodKeyword('breakthrough', 1.8),
 
     // English - phrases
     MoodKeyword("let's go", 2.2),
@@ -111,6 +572,54 @@ class MoodDetectionService {
     MoodKeyword('dream come true', 2.5),
     MoodKeyword('living the dream', 2.0),
     MoodKeyword('so proud right now', 1.8),
+    // English - phrases (expanded)
+    MoodKeyword('over the moon', 2.5),
+    MoodKeyword('on cloud nine', 2.5),
+    MoodKeyword('on top of the world', 2.3),
+    MoodKeyword('walking on air', 2.2),
+    MoodKeyword('blown away', 2.2),
+    MoodKeyword('mind blown', 2.2),
+    MoodKeyword('jaw dropped', 2.0),
+    MoodKeyword('no way', 1.5),
+    MoodKeyword('holy cow', 1.8),
+    MoodKeyword('holy moly', 1.8),
+    MoodKeyword('fired up', 2.0),
+    MoodKeyword('amped up', 2.0),
+    MoodKeyword('charged up', 1.8),
+    MoodKeyword('raring to go', 2.0),
+    MoodKeyword('jumping for joy', 2.3),
+    MoodKeyword('beside myself', 2.0),
+    MoodKeyword("can't sit still", 2.0),
+    MoodKeyword('revved up', 1.8),
+    MoodKeyword('super stoked', 2.3),
+    MoodKeyword('absolutely thrilled', 2.5),
+    MoodKeyword('beyond excited', 2.6),
+    MoodKeyword('super hyped', 2.3),
+    MoodKeyword('this is huge', 2.0),
+    MoodKeyword('huge news', 2.0),
+    MoodKeyword('big news', 1.8),
+    MoodKeyword("can't believe it", 2.0),
+    MoodKeyword('no freaking way', 2.0),
+    MoodKeyword('sign me up', 1.8),
+    MoodKeyword('count me in', 1.8),
+    MoodKeyword("i'm all in", 1.8),
+    MoodKeyword('bucket list', 1.5),
+    MoodKeyword('dream job', 2.0),
+    MoodKeyword('once in a lifetime', 2.2),
+    MoodKeyword('achievement unlocked', 2.0),
+    MoodKeyword('level up', 1.8),
+    MoodKeyword('leveled up', 1.8),
+    MoodKeyword('crushing it', 2.0),
+    MoodKeyword('killing it', 2.0),
+    MoodKeyword('nailed it', 2.0),
+    MoodKeyword('smashed it', 2.0),
+    MoodKeyword('aced it', 2.0),
+    MoodKeyword('top notch', 1.8),
+    MoodKeyword('first class', 1.5),
+    MoodKeyword('world class', 1.8),
+    MoodKeyword('five stars', 1.8),
+    MoodKeyword('ten out of ten', 1.8),
+    MoodKeyword("chef's kiss", 1.8),
 
     // Arabic - MSA
     MoodKeyword('متحمس', 2.0),
@@ -149,6 +658,31 @@ class MoodDetectionService {
     MoodKeyword('يا سلام على', 1.5),
     MoodKeyword('الحمد لله', 1.5),
     MoodKeyword('الحمدلله', 1.5),
+    // Arabic - MSA (expanded)
+    MoodKeyword('بهجة', 1.8),
+    MoodKeyword('انتشاء', 2.0),
+    MoodKeyword('نشوة', 2.0),
+    MoodKeyword('حبور', 1.8),
+    MoodKeyword('غبطة', 1.8),
+    MoodKeyword('تهلل', 1.8),
+    MoodKeyword('مفاجأة سارة', 2.0),
+    MoodKeyword('مفاجأة سعيدة', 2.0),
+    MoodKeyword('خبر سار', 2.0),
+    MoodKeyword('خبر رائع', 2.0),
+    MoodKeyword('نجاح باهر', 2.2),
+    MoodKeyword('إنجاز عظيم', 2.2),
+    MoodKeyword('حلم تحقق', 2.3),
+    MoodKeyword('لحظة تاريخية', 1.8),
+    MoodKeyword('يوم لا ينسى', 1.8),
+    MoodKeyword('أفضل يوم في حياتي', 2.5),
+    MoodKeyword('استثنائي', 1.5),
+    MoodKeyword('فريد من نوعه', 1.5),
+    MoodKeyword('رائع بحق', 2.0),
+    MoodKeyword('مبهر', 1.8),
+    MoodKeyword('مبهرة', 1.8),
+    MoodKeyword('خيالي', 1.8),
+    MoodKeyword('خيالية', 1.8),
+    MoodKeyword('لا يوصف', 1.8),
 
     // Egyptian Arabic
     MoodKeyword('مبسوط', 1.8),
@@ -199,6 +733,27 @@ class MoodDetectionService {
     MoodKeyword('يا فرحتي', 2.0),
     MoodKeyword('يا نهار أبيض', 1.5),
     MoodKeyword('يا نهار ابيض', 1.5),
+    // Egyptian Arabic (expanded)
+    MoodKeyword('مبسوط جدا جدا', 2.8),
+    MoodKeyword('حاسس اني في السحاب', 2.3),
+    MoodKeyword('حاسة اني في السحاب', 2.3),
+    MoodKeyword('حاسس اني طاير', 2.2),
+    MoodKeyword('حاسة اني طايرة', 2.2),
+    MoodKeyword('احلى يوم', 2.0),
+    MoodKeyword('احسن حاجة حصلت', 2.2),
+    MoodKeyword('مش مصدق اللي حصل', 2.2),
+    MoodKeyword('ده احلى حاجة', 2.0),
+    MoodKeyword('ده اجمل حاجة', 2.0),
+    MoodKeyword('بجد فرحان', 2.0),
+    MoodKeyword('بجد فرحانة', 2.0),
+    MoodKeyword('بجد مبسوط', 2.0),
+    MoodKeyword('بجد مبسوطة', 2.0),
+    MoodKeyword('نجحت', 1.8),
+    MoodKeyword('نجحنا', 2.0),
+    MoodKeyword('كسبنا', 1.8),
+    MoodKeyword('فزنا', 1.8),
+    MoodKeyword('حلمي اتحقق', 2.3),
+    MoodKeyword('يا رب تدوم الفرحة', 1.8),
 
     // Arabizi
     MoodKeyword('mabsout', 1.8),
@@ -226,6 +781,15 @@ class MoodDetectionService {
     MoodKeyword('ana farhan', 2.0),
     MoodKeyword('ana farhana', 2.0),
     MoodKeyword('el donia 7elwa', 1.8),
+    // Arabizi (expanded)
+    MoodKeyword('mabsoot awy awy', 2.8),
+    MoodKeyword('ana fel sama', 2.2),
+    MoodKeyword('ahla yom', 2.0),
+    MoodKeyword('nagaht', 1.8),
+    MoodKeyword('nagahna', 2.0),
+    MoodKeyword('kasabna', 1.8),
+    MoodKeyword('fazna', 1.8),
+    MoodKeyword('helmy et7a2a2', 2.3),
   ];
 
   // ---------------------------------------------------------------------------
@@ -286,6 +850,59 @@ class MoodDetectionService {
     MoodKeyword('positive vibes', 1.5),
     MoodKeyword('good vibes', 1.5),
     MoodKeyword('good mood', 1.5),
+    // English (expanded)
+    MoodKeyword('warm', 1.0),
+    MoodKeyword('wholesome', 1.5),
+    MoodKeyword('heartwarming', 1.8),
+    MoodKeyword('uplifting', 1.5),
+    MoodKeyword('soothing', 1.3),
+    MoodKeyword('tranquil', 1.3),
+    MoodKeyword('serene', 1.5),
+    MoodKeyword('harmonious', 1.3),
+    MoodKeyword('balanced', 1.0),
+    MoodKeyword('refreshed', 1.3),
+    MoodKeyword('rejuvenated', 1.5),
+    MoodKeyword('radiant', 1.5),
+    MoodKeyword('glowing', 1.3),
+    MoodKeyword('bright', 1.0),
+    MoodKeyword('sunny', 1.0),
+    MoodKeyword('carefree', 1.3),
+    MoodKeyword('easygoing', 1.0),
+    MoodKeyword('chill', 1.0),
+    MoodKeyword('mellow', 1.0),
+    MoodKeyword('at ease', 1.3),
+    MoodKeyword('at peace', 1.5),
+    MoodKeyword('fulfilled', 1.5),
+    MoodKeyword('accomplished', 1.5),
+    MoodKeyword('gratified', 1.3),
+    MoodKeyword('touched', 1.3),
+    MoodKeyword('moved', 1.0),
+    MoodKeyword('heartfelt', 1.3),
+    MoodKeyword('affectionate', 1.3),
+    MoodKeyword('fond', 1.0),
+    MoodKeyword('cherish', 1.3),
+    MoodKeyword('cherished', 1.3),
+    MoodKeyword('treasure', 1.2),
+    MoodKeyword('treasured', 1.3),
+    MoodKeyword('cozy', 1.2),
+    MoodKeyword('snug', 1.0),
+    MoodKeyword('comfy', 1.0),
+    MoodKeyword('homely', 1.0),
+    MoodKeyword('nostalgic', 1.0),
+    MoodKeyword('sentimental', 1.0),
+    MoodKeyword('genuine', 0.8),
+    MoodKeyword('sincere', 0.8),
+    MoodKeyword('warmhearted', 1.5),
+    MoodKeyword('tender', 1.0),
+    MoodKeyword('gentle', 0.8),
+    MoodKeyword('caring', 1.0),
+    MoodKeyword('compassionate', 1.0),
+    MoodKeyword('friendly', 0.8),
+    MoodKeyword('welcoming', 1.0),
+    MoodKeyword('hospitable', 1.0),
+    MoodKeyword('generous', 0.8),
+    MoodKeyword('thoughtful', 0.8),
+    MoodKeyword('considerate', 0.8),
 
     // English phrases
     MoodKeyword('feeling good', 1.5),
@@ -371,6 +988,25 @@ class MoodDetectionService {
     MoodKeyword('الدنيا تمام', 1.5),
     MoodKeyword('أنا بخير', 1.5),
     MoodKeyword('انا بخير', 1.5),
+    // Arabic (expanded)
+    MoodKeyword('دفء', 1.2),
+    MoodKeyword('طمأنينة', 1.5),
+    MoodKeyword('سكينة', 1.5),
+    MoodKeyword('هدوء', 1.0),
+    MoodKeyword('انسجام', 1.2),
+    MoodKeyword('توازن', 1.0),
+    MoodKeyword('منتعش', 1.2),
+    MoodKeyword('مشرق', 1.2),
+    MoodKeyword('مرح', 1.2),
+    MoodKeyword('بهيج', 1.3),
+    MoodKeyword('وديع', 1.0),
+    MoodKeyword('حنون', 1.0),
+    MoodKeyword('رقيق', 0.8),
+    MoodKeyword('كريم', 0.8),
+    MoodKeyword('مضياف', 1.0),
+    MoodKeyword('صادق', 0.8),
+    MoodKeyword('مرتاح البال', 1.8),
+    MoodKeyword('قرير العين', 1.5),
 
     // Arabizi
     MoodKeyword('sa3eed', 1.5),
@@ -392,6 +1028,14 @@ class MoodDetectionService {
     MoodKeyword('alhamdulillah', 1.5),
     MoodKeyword('al7amdulillah', 1.5),
     MoodKeyword('kol 7aga tamam', 1.8),
+    // Arabizi (expanded)
+    MoodKeyword('albi hadi', 1.8),
+    MoodKeyword('merta7 albi', 1.8),
+    MoodKeyword('bagad sa3eed', 1.8),
+    MoodKeyword('bagad sa3eeda', 1.8),
+    MoodKeyword('el gaw 7elw', 1.3),
+    MoodKeyword('yom 7elw', 1.5),
+    MoodKeyword('7ayah 7elwa', 1.5),
   ];
 
   // ---------------------------------------------------------------------------
@@ -460,6 +1104,63 @@ class MoodDetectionService {
     MoodKeyword('forgotten', 1.8),
     MoodKeyword('abandoned', 2.2),
     MoodKeyword('abandonment', 2.2),
+    // English (expanded)
+    MoodKeyword('somber', 1.8),
+    MoodKeyword('sorrowful', 2.0),
+    MoodKeyword('despondent', 2.2),
+    MoodKeyword('dejected', 2.0),
+    MoodKeyword('downcast', 1.8),
+    MoodKeyword('crestfallen', 2.0),
+    MoodKeyword('forlorn', 2.0),
+    MoodKeyword('woeful', 1.8),
+    MoodKeyword('bereft', 2.2),
+    MoodKeyword('heavyhearted', 2.0),
+    MoodKeyword('downhearted', 1.8),
+    MoodKeyword('weeping', 2.2),
+    MoodKeyword('sobbing', 2.2),
+    MoodKeyword('sniffling', 1.5),
+    MoodKeyword('choked up', 1.8),
+    MoodKeyword('aching', 1.5),
+    MoodKeyword('ache', 1.3),
+    MoodKeyword('longing', 1.5),
+    MoodKeyword('yearning', 1.5),
+    MoodKeyword('homesick', 1.8),
+    MoodKeyword('discouraged', 1.8),
+    MoodKeyword('demoralized', 2.0),
+    MoodKeyword('defeated', 2.0),
+    MoodKeyword('crushed', 2.0),
+    MoodKeyword('shattered', 2.2),
+    MoodKeyword('wrecked', 2.0),
+    MoodKeyword('numb', 1.8),
+    MoodKeyword('hollow', 1.8),
+    MoodKeyword('void', 1.5),
+    MoodKeyword('desolate', 2.0),
+    MoodKeyword('bleak', 1.8),
+    MoodKeyword('dismal', 1.8),
+    MoodKeyword('inconsolable', 2.5),
+    MoodKeyword('anguished', 2.3),
+    MoodKeyword('anguish', 2.3),
+    MoodKeyword('despair', 2.3),
+    MoodKeyword('despairing', 2.3),
+    MoodKeyword('wretched', 2.0),
+    MoodKeyword('pitiful', 1.5),
+    MoodKeyword('sullen', 1.5),
+    MoodKeyword('moody', 1.2),
+    MoodKeyword('brooding', 1.5),
+    MoodKeyword('withdrawn', 1.5),
+    MoodKeyword('isolated', 1.8),
+    MoodKeyword('isolation', 1.8),
+    MoodKeyword('estranged', 1.8),
+    MoodKeyword('unloved', 2.0),
+    MoodKeyword('unwanted', 2.0),
+    MoodKeyword('neglected', 2.0),
+    MoodKeyword('neglect', 1.8),
+    MoodKeyword('overlooked', 1.5),
+    MoodKeyword('dismissed', 1.5),
+    MoodKeyword('let down', 1.8),
+    MoodKeyword('gave up', 2.0),
+    MoodKeyword('giving up', 2.0),
+    MoodKeyword('no point', 2.0),
 
     // English phrases
     MoodKeyword('i feel awful', 2.0),
@@ -497,6 +1198,10 @@ class MoodDetectionService {
     MoodKeyword('no one cares', 2.2),
     MoodKeyword('i am alone', 1.8),
     MoodKeyword("i'm alone", 1.8),
+    // English phrases (expanded)
+    MoodKeyword('can not go on', 2.3),
+    MoodKeyword("can't go on", 2.3),
+    MoodKeyword('nothing left', 2.2),
 
     // Arabic
     MoodKeyword('حزين', 1.8),
@@ -583,6 +1288,45 @@ class MoodDetectionService {
     MoodKeyword('حاسة إني لوحدي', 2.2),
     MoodKeyword('حاسس اني لوحدي', 2.2),
     MoodKeyword('حاسة اني لوحدي', 2.2),
+    // Arabic (expanded)
+    MoodKeyword('كآبة', 2.2),
+    MoodKeyword('أسى', 1.8),
+    MoodKeyword('أسف', 1.2),
+    MoodKeyword('مغموم', 2.0),
+    MoodKeyword('مغمومة', 2.0),
+    MoodKeyword('كسير القلب', 2.5),
+    MoodKeyword('منكسر', 2.0),
+    MoodKeyword('منكسرة', 2.0),
+    MoodKeyword('موجع القلب', 2.2),
+    MoodKeyword('حزن عميق', 2.3),
+    MoodKeyword('حزن شديد', 2.3),
+    MoodKeyword('وحشة', 1.8),
+    MoodKeyword('غربة', 1.5),
+    MoodKeyword('انكسار', 2.0),
+    MoodKeyword('خذلان', 2.0),
+    MoodKeyword('خيبة أمل', 1.8),
+    MoodKeyword('قنوط', 2.2),
+    MoodKeyword('بائس', 2.0),
+    MoodKeyword('بائسة', 2.0),
+    MoodKeyword('منعزل', 1.8),
+    MoodKeyword('منعزلة', 1.8),
+    MoodKeyword('مهمل', 1.8),
+    MoodKeyword('مهملة', 1.8),
+    MoodKeyword('منسي', 1.8),
+    MoodKeyword('منسية', 1.8),
+
+    // Egyptian additions
+    MoodKeyword('قلبي واجعني', 2.2),
+    MoodKeyword('حاسس بخيبة أمل', 1.8),
+    MoodKeyword('حاسة بخيبة أمل', 1.8),
+    MoodKeyword('محدش بيسأل عني', 2.0),
+    MoodKeyword('مفيش حد جنبي', 2.0),
+    MoodKeyword('تعبت نفسيا', 1.8),
+    MoodKeyword('تعبت جوايا', 2.0),
+    MoodKeyword('مش لاقي حد يفهمني', 2.0),
+    MoodKeyword('مش لاقية حد يفهمني', 2.0),
+    MoodKeyword('ضاعت مني', 1.8),
+    MoodKeyword('ضاع مني كل حاجة', 2.2),
 
     // Arabizi
     MoodKeyword('7azeen', 1.8),
@@ -610,6 +1354,11 @@ class MoodDetectionService {
     MoodKeyword('ana ta3bana', 1.8),
     MoodKeyword('ana wa7dy', 2.0),
     MoodKeyword('ana wa7da', 2.0),
+    // Arabizi (expanded)
+    MoodKeyword('5ayba amal', 1.8),
+    MoodKeyword('ma7dsh bysal 3any', 2.0),
+    MoodKeyword('mafeesh 7ad ganby', 2.0),
+    MoodKeyword('ta3bet nafseyan', 1.8),
   ];
 
   // ---------------------------------------------------------------------------
@@ -668,33 +1417,52 @@ class MoodDetectionService {
     MoodKeyword('damn', 1.0),
     MoodKeyword('wtf', 1.8),
     MoodKeyword('ugh', 1.5),
-
-    // English phrases
-    MoodKeyword('leave me alone', 1.8),
-    MoodKeyword('get out', 1.5),
-    MoodKeyword('shut up', 1.8),
-    MoodKeyword('go away', 1.5),
-    MoodKeyword('this is annoying', 2.0),
-    MoodKeyword('you are annoying', 2.0),
-    MoodKeyword("you're annoying", 2.0),
-    MoodKeyword('i am done', 1.8),
-    MoodKeyword("i'm done", 1.8),
-    MoodKeyword('i am sick of this', 2.2),
-    MoodKeyword("i'm sick of this", 2.2),
-    MoodKeyword('i am fed up', 2.2),
-    MoodKeyword("i'm fed up", 2.2),
-    MoodKeyword('this makes me angry', 2.5),
-    MoodKeyword('this makes me mad', 2.2),
-    MoodKeyword('this is ridiculous', 2.2),
-    MoodKeyword('this is unacceptable', 2.2),
-    MoodKeyword('how dare you', 2.2),
-    MoodKeyword('not again', 1.5),
-    MoodKeyword('are you serious', 1.5),
-    MoodKeyword('you have got to be kidding', 1.8),
-    MoodKeyword('i cannot take this', 2.0),
-    MoodKeyword("i can't take this", 2.0),
-    MoodKeyword('stop it', 1.5),
-    MoodKeyword('stop doing that', 1.5),
+    // English (expanded)
+    MoodKeyword('enraged', 2.5),
+    MoodKeyword('incensed', 2.3),
+    MoodKeyword('seething', 2.3),
+    MoodKeyword('boiling', 2.0),
+    MoodKeyword('fuming', 2.2),
+    MoodKeyword('irate', 2.2),
+    MoodKeyword('wrathful', 2.3),
+    MoodKeyword('indignant', 1.8),
+    MoodKeyword('resentful', 1.8),
+    MoodKeyword('resentment', 1.8),
+    MoodKeyword('bitter', 1.5),
+    MoodKeyword('bitterness', 1.5),
+    MoodKeyword('hostile', 1.8),
+    MoodKeyword('hostility', 1.8),
+    MoodKeyword('aggressive', 1.5),
+    MoodKeyword('aggravated', 1.8),
+    MoodKeyword('aggravating', 1.5),
+    MoodKeyword('exasperated', 1.8),
+    MoodKeyword('exasperating', 1.5),
+    MoodKeyword('provoked', 1.5),
+    MoodKeyword('triggered', 1.8),
+    MoodKeyword('raging mad', 2.5),
+    MoodKeyword('boiling mad', 2.5),
+    MoodKeyword('spitting mad', 2.5),
+    MoodKeyword('pissed', 2.0),
+    MoodKeyword('pissed off', 2.2),
+    MoodKeyword('ticked off', 1.8),
+    MoodKeyword('cheesed off', 1.8),
+    MoodKeyword('hacked off', 1.8),
+    MoodKeyword('grinding my teeth', 1.8),
+    MoodKeyword('my blood is boiling', 2.3),
+    MoodKeyword('sick and tired', 2.0),
+    MoodKeyword('had it up to here', 2.0),
+    MoodKeyword('crossed a line', 1.8),
+    MoodKeyword('crossed the line', 1.8),
+    MoodKeyword('out of line', 1.5),
+    MoodKeyword('not cool', 1.3),
+    MoodKeyword('not fair', 1.8),
+    MoodKeyword('so unfair', 2.0),
+    MoodKeyword('this is bull', 1.8),
+    MoodKeyword('this is trash', 1.8),
+    MoodKeyword('garbage', 1.5),
+    MoodKeyword('back off', 1.5),
+    MoodKeyword('knock it off', 1.5),
+    MoodKeyword('cut it out', 1.5),
 
     // Arabic
     MoodKeyword('غاضب', 2.0),
@@ -752,9 +1520,39 @@ class MoodDetectionService {
     MoodKeyword('مش ناقصاك', 1.8),
     MoodKeyword('مش ناقصاكي', 1.8),
     MoodKeyword('كفاية بقى', 1.8),
-    MoodKeyword('بطل بقى', 1.8),
     MoodKeyword('سيبني', 1.5),
     MoodKeyword('ابعد', 1.2),
+    // Arabic (expanded)
+    MoodKeyword('سخط', 2.0),
+    MoodKeyword('استياء', 1.8),
+    MoodKeyword('حنق', 2.0),
+    MoodKeyword('حقد', 2.2),
+    MoodKeyword('ضغينة', 2.2),
+    MoodKeyword('عدائية', 1.8),
+    MoodKeyword('عدواني', 1.8),
+    MoodKeyword('عدوانية', 1.8),
+    MoodKeyword('متذمر', 1.5),
+    MoodKeyword('متذمرة', 1.5),
+    MoodKeyword('ثائر', 1.8),
+    MoodKeyword('ثائرة', 1.8),
+    MoodKeyword('محتد', 1.8),
+    MoodKeyword('محتدة', 1.8),
+    MoodKeyword('يغلي غضبا', 2.3),
+    MoodKeyword('دمي يغلي', 2.3),
+    MoodKeyword('طفح الكيل', 2.2),
+    MoodKeyword('انتهت طاقتي', 2.0),
+
+    // Egyptian additions
+    MoodKeyword('دمي بيغلي', 2.2),
+    MoodKeyword('طفح الكيل بجد', 2.3),
+    MoodKeyword('خلاص كفاية كده', 2.0),
+    MoodKeyword('مش هسكت', 1.8),
+    MoodKeyword('حاسس بغل', 2.0),
+    MoodKeyword('حاسة بغل', 2.0),
+    MoodKeyword('اتنرفزت', 2.0),
+    MoodKeyword('نرفزني', 2.0),
+    MoodKeyword('نرفزتني', 2.0),
+    MoodKeyword('اتنرفزت اوي', 2.4),
 
     // Arabizi
     MoodKeyword('3asban', 1.8),
@@ -779,6 +1577,11 @@ class MoodDetectionService {
     MoodKeyword('ana mdaye2a', 2.0),
     MoodKeyword('kefaya ba2a', 1.8),
     MoodKeyword('seebny', 1.5),
+    // Arabizi (expanded)
+    MoodKeyword('demy bygheli', 2.2),
+    MoodKeyword('khalas kefaya kda', 2.0),
+    MoodKeyword('etnarfezt', 2.0),
+    MoodKeyword('narfezny', 2.0),
   ];
 
   // ---------------------------------------------------------------------------
@@ -830,12 +1633,62 @@ class MoodDetectionService {
     MoodKeyword('pressure', 1.5),
     MoodKeyword('overthinking', 2.0),
     MoodKeyword('overthink', 1.8),
-    MoodKeyword('restless', 1.5),
     MoodKeyword('shaking', 1.8),
     MoodKeyword('shaky', 1.8),
     MoodKeyword('scary', 1.8),
     MoodKeyword('worst case', 1.5),
     MoodKeyword('unclear', 1.0),
+    // English (expanded)
+    MoodKeyword('apprehensive', 1.8),
+    MoodKeyword('apprehension', 1.8),
+    MoodKeyword('jittery', 1.8),
+    MoodKeyword('jumpy', 1.8),
+    MoodKeyword('on edge', 2.0),
+    MoodKeyword('edgy', 1.5),
+    MoodKeyword('skittish', 1.5),
+    MoodKeyword('rattled', 1.8),
+    MoodKeyword('shaken', 1.8),
+    MoodKeyword('shook', 1.5),
+    MoodKeyword('spooked', 1.8),
+    MoodKeyword('alarmed', 1.8),
+    MoodKeyword('alarming', 1.5),
+    MoodKeyword('distressed', 2.0),
+    MoodKeyword('distressing', 1.8),
+    MoodKeyword('troubled', 1.5),
+    MoodKeyword('troubling', 1.5),
+    MoodKeyword('agitated', 1.8),
+    MoodKeyword('agitation', 1.8),
+    MoodKeyword('flustered', 1.5),
+    MoodKeyword('frazzled', 1.8),
+    MoodKeyword('strung out', 2.0),
+    MoodKeyword('wound up', 1.5),
+    MoodKeyword('keyed up', 1.5),
+    MoodKeyword('butterflies', 1.5),
+    MoodKeyword('butterflies in my stomach', 1.8),
+    MoodKeyword('knot in my stomach', 2.0),
+    MoodKeyword('stomach in knots', 2.0),
+    MoodKeyword('sweaty palms', 1.8),
+    MoodKeyword('cold sweat', 1.8),
+    MoodKeyword('lump in my throat', 1.8),
+    MoodKeyword('racing thoughts', 2.0),
+    MoodKeyword('spiraling', 2.0),
+    MoodKeyword('spiral', 1.5),
+    MoodKeyword('catastrophizing', 2.0),
+    MoodKeyword('worst case scenario', 1.8),
+    MoodKeyword('second guessing', 1.5),
+    MoodKeyword('second-guessing', 1.5),
+    MoodKeyword('insomnia', 1.8),
+    MoodKeyword("can't sleep", 1.8),
+    MoodKeyword('cant sleep', 1.8),
+    MoodKeyword('sleepless', 1.5),
+    MoodKeyword('restless night', 1.5),
+    MoodKeyword('walking on eggshells', 2.0),
+    MoodKeyword('on high alert', 1.8),
+    MoodKeyword('hypervigilant', 2.0),
+    MoodKeyword('claustrophobic', 1.8),
+    MoodKeyword('suffocating', 2.2),
+    MoodKeyword('trapped', 1.8),
+    MoodKeyword('cornered', 1.5),
 
     // English phrases
     MoodKeyword('under pressure', 1.8),
@@ -942,6 +1795,32 @@ class MoodDetectionService {
     MoodKeyword('انا متوتر', 1.8),
     MoodKeyword('أنا متوترة', 1.8),
     MoodKeyword('انا متوترة', 1.8),
+    // Arabic (expanded)
+    MoodKeyword('ترقب مقلق', 1.8),
+    MoodKeyword('قلق شديد', 2.3),
+    MoodKeyword('اضطراب', 2.0),
+    MoodKeyword('مضطرب', 2.0),
+    MoodKeyword('مضطربة', 2.0),
+    MoodKeyword('خشية', 1.5),
+    MoodKeyword('وجل', 1.8),
+    MoodKeyword('ذعر', 2.3),
+    MoodKeyword('هلع', 2.4),
+    MoodKeyword('مهلوع', 2.3),
+    MoodKeyword('مهلوعة', 2.3),
+    MoodKeyword('خائف جدا', 2.3),
+    MoodKeyword('خائفة جدا', 2.3),
+    MoodKeyword('شعور بالاختناق', 2.3),
+    MoodKeyword('ضيق نفسي', 2.0),
+
+    // Egyptian additions
+    MoodKeyword('حاسس اني هتخنق', 2.2),
+    MoodKeyword('حاسة اني هتخنق', 2.2),
+    MoodKeyword('قلبي واقف', 2.0),
+    MoodKeyword('قلبي مش مطمن', 2.0),
+    MoodKeyword('مش عارف انام من القلق', 2.2),
+    MoodKeyword('مش عارفة انام من القلق', 2.2),
+    MoodKeyword('حاسس بضغط جامد', 2.0),
+    MoodKeyword('حاسة بضغط جامد', 2.0),
 
     // Arabizi
     MoodKeyword('2ale2', 2.0),
@@ -963,7 +1842,6 @@ class MoodDetectionService {
     MoodKeyword('mesh motamen', 1.8),
     MoodKeyword('mesh motamena', 1.8),
     MoodKeyword('2alby byedrob besor3a', 2.2),
-    MoodKeyword('2alby byedrob besor3a', 2.2),
     MoodKeyword('mesh 2ader atnafas', 2.5),
     MoodKeyword('mesh 2adra atnafas', 2.5),
     MoodKeyword('bafakar kteer', 1.8),
@@ -972,6 +1850,9 @@ class MoodDetectionService {
     MoodKeyword('mesh 3arfa anam', 1.8),
     MoodKeyword('ana motawater', 2.0),
     MoodKeyword('ana motawatera', 2.0),
+    // Arabizi (expanded)
+    MoodKeyword('2albi wa2ef', 2.0),
+    MoodKeyword('mesh 3aref anam mn el2ala2', 2.2),
   ];
 
   // ---------------------------------------------------------------------------
@@ -1000,6 +1881,10 @@ class MoodDetectionService {
     MoodKeyword('🤣', 2.0),
     MoodKeyword('😎', 1.5),
     MoodKeyword('🤗', 1.5),
+    MoodKeyword('🎇', 1.8),
+    MoodKeyword('🎆', 1.8),
+    MoodKeyword('💫', 1.3),
+    MoodKeyword('📣', 1.3),
   ];
 
   static const happyEmojis = <MoodKeyword>[
@@ -1027,6 +1912,12 @@ class MoodDetectionService {
     MoodKeyword('🌸', 1.0),
     MoodKeyword('🌹', 1.0),
     MoodKeyword('☀️', 1.0),
+    MoodKeyword('🙂', 1.2),
+    MoodKeyword('😉', 1.0),
+    MoodKeyword('🌻', 1.0),
+    MoodKeyword('🌼', 1.0),
+    MoodKeyword('🍀', 1.0),
+    MoodKeyword('🕊️', 1.2),
   ];
 
   static const sadEmojis = <MoodKeyword>[
@@ -1038,7 +1929,6 @@ class MoodDetectionService {
     MoodKeyword('😥', 2.0),
     MoodKeyword('😓', 1.8),
     MoodKeyword('😪', 1.8),
-    MoodKeyword('😢', 2.0),
     MoodKeyword('🥺', 1.8),
     MoodKeyword('💔', 2.5),
     MoodKeyword('🖤', 1.5),
@@ -1048,6 +1938,8 @@ class MoodDetectionService {
     MoodKeyword('☹️', 1.8),
     MoodKeyword('😣', 1.8),
     MoodKeyword('😩', 1.8),
+    MoodKeyword('🥲', 1.8),
+    MoodKeyword('😶‍🌫️', 1.5),
   ];
 
   static const angryEmojis = <MoodKeyword>[
@@ -1063,6 +1955,9 @@ class MoodDetectionService {
     MoodKeyword('🔥', 1.2),
     MoodKeyword('💥', 1.5),
     MoodKeyword('👊', 1.3),
+    MoodKeyword('😑', 1.3),
+    MoodKeyword('🙄', 1.5),
+    MoodKeyword('💣', 1.5),
   ];
 
   static const anxiousEmojis = <MoodKeyword>[
@@ -1081,407 +1976,7 @@ class MoodDetectionService {
     MoodKeyword('🫣', 1.8),
     MoodKeyword('🥶', 1.5),
     MoodKeyword('💀', 1.0),
+    MoodKeyword('😮‍💨', 1.5),
+    MoodKeyword('🫠', 1.5),
   ];
-
-  // ---------------------------------------------------------------------------
-  // DETECTION
-  // ---------------------------------------------------------------------------
-
-  Future<Mood> detectMood(String text) async {
-    if (text.trim().isEmpty) {
-      return Mood.neutral;
-    }
-
-    final normalized = normalizeText(text);
-    final wordCount =
-        normalized.isEmpty ? 0 : normalized.split(RegExp(r'\s+')).length;
-
-    final score = <Mood, double>{
-      Mood.excited: _scoreMoodKeywords(
-        normalized,
-        excitedKeywords,
-      ),
-      Mood.happy: _scoreMoodKeywords(
-        normalized,
-        happyKeywords,
-      ),
-      Mood.sad: _scoreMoodKeywords(
-        normalized,
-        sadKeywords,
-      ),
-      Mood.angry: _scoreMoodKeywords(
-        normalized,
-        angryKeywords,
-      ),
-      Mood.anxious: _scoreMoodKeywords(
-        normalized,
-        anxiousKeywords,
-      ),
-      Mood.neutral: 0,
-    };
-
-    // -----------------------------------------------------------------------
-    // Emoji scoring
-    // -----------------------------------------------------------------------
-
-    score[Mood.excited] =
-        (score[Mood.excited] ?? 0) + _scoreEmojis(text, excitedEmojis);
-
-    score[Mood.happy] =
-        (score[Mood.happy] ?? 0) + _scoreEmojis(text, happyEmojis);
-
-    score[Mood.sad] = (score[Mood.sad] ?? 0) + _scoreEmojis(text, sadEmojis);
-
-    score[Mood.angry] =
-        (score[Mood.angry] ?? 0) + _scoreEmojis(text, angryEmojis);
-
-    score[Mood.anxious] =
-        (score[Mood.anxious] ?? 0) + _scoreEmojis(text, anxiousEmojis);
-
-    // -----------------------------------------------------------------------
-    // Punctuation / intensity
-    // -----------------------------------------------------------------------
-
-    final exclamationCount = '!'.allMatches(text).length;
-    final questionCount = '?'.allMatches(text).length;
-
-    if (exclamationCount > 0) {
-      score[Mood.excited] =
-          (score[Mood.excited] ?? 0) + (exclamationCount >= 3 ? 0.8 : 0.3);
-
-      score[Mood.happy] =
-          (score[Mood.happy] ?? 0) + (exclamationCount >= 3 ? 0.3 : 0.1);
-
-      // Strong punctuation can also indicate anger.
-      if (exclamationCount >= 2) {
-        score[Mood.angry] = (score[Mood.angry] ?? 0) + 0.2;
-      }
-    }
-
-    if (questionCount >= 2) {
-      score[Mood.anxious] = (score[Mood.anxious] ?? 0) + 0.3;
-    }
-
-    // -----------------------------------------------------------------------
-    // Negation handling
-    //
-    // Prevent common phrases such as:
-    // "not happy"
-    // "not good"
-    // "don't love"
-    // "مش مبسوط"
-    //
-    // from being incorrectly classified as positive.
-    // -----------------------------------------------------------------------
-
-    _applyNegationAdjustments(normalized, score);
-
-    // -----------------------------------------------------------------------
-    // Repeated punctuation / uppercase intensity
-    // -----------------------------------------------------------------------
-
-    final uppercaseRatio = _uppercaseRatio(text);
-
-    if (uppercaseRatio >= 0.65 && text.length >= 6) {
-      score[Mood.excited] = (score[Mood.excited] ?? 0) + 0.3;
-      score[Mood.angry] = (score[Mood.angry] ?? 0) + 0.2;
-    }
-
-    // -----------------------------------------------------------------------
-    // Neutral threshold
-    // -----------------------------------------------------------------------
-
-    final maxScore = score.values.reduce(
-      (a, b) => a > b ? a : b,
-    );
-
-    final threshold = wordCount <= 2 ? 0.2 : 0.1;
-
-    if (maxScore < threshold) {
-      return Mood.neutral;
-    }
-
-    // -----------------------------------------------------------------------
-    // Find strongest mood.
-    //
-    // In case of a very close result, prefer the more specific/intense mood.
-    // -----------------------------------------------------------------------
-
-    Mood bestMood = Mood.neutral;
-    double bestScore = double.negativeInfinity;
-
-    for (final entry in score.entries) {
-      if (entry.key == Mood.neutral) {
-        continue;
-      }
-
-      if (entry.value > bestScore) {
-        bestScore = entry.value;
-        bestMood = entry.key;
-      }
-    }
-
-    return bestMood;
-  }
-
-  // ---------------------------------------------------------------------------
-  // KEYWORD SCORING
-  // ---------------------------------------------------------------------------
-
-  double _scoreMoodKeywords(
-    String text,
-    List<MoodKeyword> keywords,
-  ) {
-    double score = 0;
-
-    for (final keyword in keywords) {
-      // Normalize the keyword too.
-      //
-      // This is important for Arabic because normalizeText() transforms:
-      // أ -> ا
-      // إ -> ا
-      // آ -> ا
-      // ة -> ه
-      // ى -> ي
-      //
-      // Therefore both the user's input and the keyword must go through the
-      // same normalization process.
-      final normalizedKeyword = normalizeText(keyword.phrase);
-
-      if (normalizedKeyword.isEmpty) {
-        continue;
-      }
-
-      if (text.contains(normalizedKeyword)) {
-        score += keyword.weight;
-      }
-    }
-
-    return score;
-  }
-
-  double _scoreEmojis(
-    String originalText,
-    List<MoodKeyword> emojis,
-  ) {
-    double score = 0;
-
-    for (final emoji in emojis) {
-      if (originalText.contains(emoji.phrase)) {
-        score += emoji.weight;
-      }
-    }
-
-    return score;
-  }
-
-  // ---------------------------------------------------------------------------
-  // NEGATION
-  // ---------------------------------------------------------------------------
-
-  void _applyNegationAdjustments(
-    String text,
-    Map<Mood, double> score,
-  ) {
-    final positiveNegations = <String>[
-      'not happy',
-      'not good',
-      'not nice',
-      'not great',
-      'not feeling good',
-      'not feeling great',
-      'dont like',
-      "don't like",
-      'do not like',
-      'dont love',
-      "don't love",
-      'do not love',
-      'not excited',
-      'not amazing',
-      'مش مبسوط',
-      'مش مبسوطة',
-      'مش سعيد',
-      'مش سعيدة',
-      'مش فرحان',
-      'مش فرحانة',
-      'مش كويس',
-      'مش كويسة',
-      'مش تمام',
-      'مش متحمس',
-      'مش متحمسة',
-      'مش عاجبني',
-      'مش عاجباني',
-      'مش بحب',
-      'مش بحبه',
-      'مش بحبها',
-    ];
-
-    final sadNegations = <String>[
-      'not sad',
-      'not unhappy',
-      'not lonely',
-      'not crying',
-      'not depressed',
-      'مش حزين',
-      'مش حزينة',
-      'مش زعلان',
-      'مش زعلانة',
-      'مش وحيد',
-      'مش وحيدة',
-      'مش بعيط',
-      'مش مكتئب',
-      'مش مكتئبة',
-    ];
-
-    for (final phrase in positiveNegations) {
-      if (text.contains(normalizeText(phrase))) {
-        score[Mood.happy] = (score[Mood.happy] ?? 0) * 0.25;
-        score[Mood.excited] = (score[Mood.excited] ?? 0) * 0.35;
-
-        // A negated positive phrase is usually neutral or negative.
-        score[Mood.sad] = (score[Mood.sad] ?? 0) + 0.4;
-      }
-    }
-
-    for (final phrase in sadNegations) {
-      if (text.contains(normalizeText(phrase))) {
-        score[Mood.sad] = (score[Mood.sad] ?? 0) * 0.25;
-      }
-    }
-
-    // Anxiety negation.
-    final anxietyNegations = <String>[
-      'not worried',
-      'not anxious',
-      'not scared',
-      'not afraid',
-      'not nervous',
-      'dont worry',
-      "don't worry",
-      'do not worry',
-      'مش قلقان',
-      'مش قلقانة',
-      'مش خايف',
-      'مش خايفة',
-      'مش متوتر',
-      'مش متوترة',
-      'مش خايف من',
-      'مش خايفة من',
-    ];
-
-    for (final phrase in anxietyNegations) {
-      if (text.contains(normalizeText(phrase))) {
-        score[Mood.anxious] = (score[Mood.anxious] ?? 0) * 0.25;
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // UPPERCASE DETECTION
-  // ---------------------------------------------------------------------------
-
-  double _uppercaseRatio(String text) {
-    final letters = text.runes
-        .map(String.fromCharCode)
-        .where((char) => RegExp(r'[A-Za-z]').hasMatch(char))
-        .toList();
-
-    if (letters.isEmpty) {
-      return 0;
-    }
-
-    final uppercase =
-        letters.where((char) => char == char.toUpperCase()).length;
-
-    return uppercase / letters.length;
-  }
-
-  // ---------------------------------------------------------------------------
-  // TEXT NORMALIZATION
-  // ---------------------------------------------------------------------------
-
-  String normalizeText(String input) {
-    var text = input.toLowerCase().trim();
-
-    // -------------------------------------------------------------------------
-    // Normalize Arabic letters.
-    // -------------------------------------------------------------------------
-
-    text = text
-        .replaceAll('أ', 'ا')
-        .replaceAll('إ', 'ا')
-        .replaceAll('آ', 'ا')
-        .replaceAll('ٱ', 'ا')
-        .replaceAll('ى', 'ي')
-        .replaceAll('ة', 'ه')
-        .replaceAll('ؤ', 'و')
-        .replaceAll('ئ', 'ي');
-
-    // -------------------------------------------------------------------------
-    // Normalize Arabic diacritics.
-    // -------------------------------------------------------------------------
-
-    text = text.replaceAll(
-      RegExp(r'[\u064B-\u065F\u0670]'),
-      '',
-    );
-
-    // -------------------------------------------------------------------------
-    // Normalize Arabic tatweel:
-    //
-    // "جــــامد" -> "جامد"
-    // -------------------------------------------------------------------------
-
-    text = text.replaceAll('ـ', '');
-
-    // -------------------------------------------------------------------------
-    // Normalize common Arabic punctuation.
-    // -------------------------------------------------------------------------
-
-    text = text
-        .replaceAll('،', ' ')
-        .replaceAll('؛', ' ')
-        .replaceAll('؟', ' ')
-        .replaceAll('«', ' ')
-        .replaceAll('»', ' ')
-        .replaceAll('“', ' ')
-        .replaceAll('”', ' ')
-        .replaceAll('‘', "'")
-        .replaceAll('’', "'");
-
-    // -------------------------------------------------------------------------
-    // Normalize repeated characters.
-    //
-    // "soooo happy" -> "soo happy"
-    // "حلووووو"     -> "حلو"
-    //
-    // Keeping two characters helps preserve expressive words while still
-    // allowing the regular keyword to match.
-    // -------------------------------------------------------------------------
-
-    text = text.replaceAll(
-      RegExp(r'(.)\1{2,}'),
-      r'$1$1',
-    );
-
-    // -------------------------------------------------------------------------
-    // Keep Arabic, English, numbers, spaces, and apostrophes.
-    // -------------------------------------------------------------------------
-
-    text = text.replaceAll(
-      RegExp(r"[^\u0600-\u06FFa-z0-9\s']"),
-      ' ',
-    );
-
-    // -------------------------------------------------------------------------
-    // Collapse multiple spaces.
-    // -------------------------------------------------------------------------
-
-    text = text.replaceAll(
-      RegExp(r'\s+'),
-      ' ',
-    );
-
-    return text.trim();
-  }
 }

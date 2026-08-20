@@ -124,6 +124,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> signOut() async {
     try {
+      final uid = _firebaseAuth.currentUser?.uid;
+      if (uid != null) {
+        await _firestore.collection('users').doc(uid).update({
+          'isOnline': false,
+          'lastSeen': FieldValue.serverTimestamp(),
+        });
+      }
       await Future.wait([
         _firebaseAuth.signOut(),
         _googleSignIn.signOut(),

@@ -44,6 +44,7 @@ migrate_working_dir/
 /build/
 /coverage/
 pubspec.lock
+assets/service_account.json
 
 # ================================
 # Symbolication related
@@ -145,6 +146,8 @@ ui-debug.log
 pubsub-debug.log
 storage-debug.log
 database-debug.log
+skills-lock.json
+.firebaserc
 
 # ================================
 # Crashlytics & Google Services

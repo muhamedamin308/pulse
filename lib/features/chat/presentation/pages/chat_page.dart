@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
+import 'package:pulse/core/constants/pulse_constants.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:pulse/features/chat/presentation/widgets/chat_input_bar.dart';
@@ -12,11 +14,13 @@ import 'package:pulse/features/chat/presentation/widgets/message_bubble.dart';
 class ChatPage extends StatefulWidget {
   final String chatId;
   final String friendName;
+  final String friendId;
 
   const ChatPage({
     super.key,
     required this.chatId,
     required this.friendName,
+    required this.friendId,
   });
 
   @override
@@ -114,8 +118,35 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: PulseColors.background,
       appBar: AppBar(
-        title: Text(widget.friendName),
         centerTitle: true,
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection(PulseConstants.usersCollection)
+              .doc(widget.friendId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            final data = snapshot.data?.data() as Map<String, dynamic>?;
+            final isOnline = data?['isOnline'] ?? false;
+            final lastSeen = (data?['lastSeen'] as Timestamp?)?.toDate();
+
+            return Column(
+              children: [
+                Text(widget.friendName),
+                Text(
+                  isOnline
+                      ? 'Online'
+                      : lastSeen != null
+                          ? 'Last seen ${_formatLastSeen(lastSeen)}'
+                          : 'Offline',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isOnline ? PulseColors.online : PulseColors.textHint,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.insights_rounded),
@@ -204,6 +235,16 @@ class _ChatPageState extends State<ChatPage> {
         ],
       ),
     );
+  }
+
+  String _formatLastSeen(DateTime lastSeen) {
+    final now = DateTime.now();
+    final diff = now.difference(lastSeen);
+
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   Widget _buildEmptyChatState() {

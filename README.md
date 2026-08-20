@@ -17,8 +17,12 @@ Every message in Pulse is tagged with a mood — auto-detected by on-device ML K
 <p align="center">
   <img src="screenshots/flutter_01.png" alt="Pulse App Screenshot" width="300"/>`
   <img src="screenshots/flutter_02.png" alt="Pulse App Screenshot" width="300"/>`
-  <img src="screenshots/flutter_03.jpg" alt="Pulse App Screenshot" width="300"/>`
-  <img src="screenshots/flutter_05.jpg" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_07.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_06.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_08.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_09.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_10.png" alt="Pulse App Screenshot" width="300"/>`
+  <img src="screenshots/flutter_11.png" alt="Pulse App Screenshot" width="300"/>`
 </p>
 
 ---
@@ -91,13 +95,13 @@ feature/
 ## 🚀 Development Phases
 
 - [x] **Phase 1** — Foundation (Architecture, Theme, DI, Routing)
-- [ ] **Phase 2** — Authentication
-- [ ] **Phase 3** — Friends System
-- [ ] **Phase 4** — 1-to-1 Chat + Mood Bubbles
-- [ ] **Phase 5** — Mood Engine (ML Kit + Manual Override)
+- [x] **Phase 2** — Authentication
+- [x] **Phase 3** — Friends System
+- [x] **Phase 4** — 1-to-1 Chat + Mood Bubbles
+- [x] **Phase 5** — Mood Engine (ML Kit + Manual Override)
 - [ ] **Phase 6** — Group Chat
-- [ ] **Phase 7** — Emotional Timeline Graph
-- [ ] **Phase 8** — Push Notifications + Online Status
+- [x] **Phase 7** — Emotional Timeline Graph
+- [x] **Phase 8** — Push Notifications + Online Status
 - [ ] **Phase 9** — Polish + Animations
 - [ ] **Phase 10** — Play Store Release
 

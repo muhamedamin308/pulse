@@ -133,7 +133,10 @@ class _ChatsPageState extends State<ChatsPage> {
                             context.pushNamed(
                               AppRoutes.chatName,
                               pathParameters: {'chatId': chat.id},
-                              queryParameters: {'friendName': friendName},
+                              queryParameters: {
+                                'friendName': friendName,
+                                'friendId': friendId, // add this
+                              },
                             );
                           },
                         ),
