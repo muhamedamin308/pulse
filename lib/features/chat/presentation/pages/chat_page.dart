@@ -5,10 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
-import 'package:pulse/core/constants/pulse_constants.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:pulse/features/chat/presentation/widgets/chat_input_bar.dart';
+import 'package:pulse/features/chat/presentation/widgets/date_separator.dart';
 import 'package:pulse/features/chat/presentation/widgets/message_bubble.dart';
 
 class ChatPage extends StatefulWidget {
@@ -30,24 +30,25 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   final _scrollController = ScrollController();
+  bool _showScrollFab = false;
 
   @override
   void initState() {
     super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatCubit>().loadMessages(widget.chatId);
-      context.read<ChatCubit>().markAsRead(
-            chatId: widget.chatId,
-            userId: _currentUserId,
-          );
-    });
+    context.read<ChatCubit>().loadMessages(widget.chatId);
+    context.read<ChatCubit>().markAsRead(
+          chatId: widget.chatId,
+          userId: _currentUserId,
+        );
+    _scrollController.addListener(_onScroll);
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  void _onScroll() {
+    final isAtBottom = _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 100;
+    if (_showScrollFab == isAtBottom) {
+      setState(() => _showScrollFab = !isAtBottom);
+    }
   }
 
   void _scrollToBottom() {
@@ -121,14 +122,13 @@ class _ChatPageState extends State<ChatPage> {
         centerTitle: true,
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
-              .collection(PulseConstants.usersCollection)
+              .collection('users')
               .doc(widget.friendId)
               .snapshots(),
           builder: (context, snapshot) {
             final data = snapshot.data?.data() as Map<String, dynamic>?;
             final isOnline = data?['isOnline'] ?? false;
             final lastSeen = (data?['lastSeen'] as Timestamp?)?.toDate();
-
             return Column(
               children: [
                 Text(widget.friendName),
@@ -163,9 +163,7 @@ class _ChatPageState extends State<ChatPage> {
           Expanded(
             child: BlocConsumer<ChatCubit, ChatState>(
               listener: (context, state) {
-                if (state is ChatLoaded) {
-                  _scrollToBottom();
-                }
+                if (state is ChatLoaded) _scrollToBottom();
               },
               builder: (context, state) {
                 if (state is ChatLoading) {
@@ -177,30 +175,96 @@ class _ChatPageState extends State<ChatPage> {
                 }
 
                 if (state is ChatError) {
-                  return _buildErrorState(state.message);
+                  return Center(child: Text(state.message));
                 }
 
                 if (state is ChatLoaded) {
                   if (state.messages.isEmpty) {
-                    return _buildEmptyChatState();
+                    return const Center(
+                      child: Text(
+                        'Say hello! 👋',
+                        style: TextStyle(color: PulseColors.textHint),
+                      ),
+                    );
                   }
 
-                  return ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                    itemCount: state.messages.length,
-                    itemBuilder: (context, index) {
-                      final message = state.messages[index];
-                      final isMe = message.senderId == _currentUserId;
+                  return Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        itemCount: state.messages.length,
+                        itemBuilder: (context, index) {
+                          final message = state.messages[index];
+                          final isMe = message.senderId == _currentUserId;
 
-                      return MessageBubble(
-                        message: message,
-                        isMe: isMe,
-                        onLongPress: () {
-                          _showDeleteDialog(message.id);
+                          // Date separator
+                          Widget? separator;
+                          if (index == 0) {
+                            separator = DateSeparator(date: message.sentAt);
+                          } else {
+                            final prev = state.messages[index - 1];
+                            final prevDate = DateTime(
+                              prev.sentAt.year,
+                              prev.sentAt.month,
+                              prev.sentAt.day,
+                            );
+                            final currDate = DateTime(
+                              message.sentAt.year,
+                              message.sentAt.month,
+                              message.sentAt.day,
+                            );
+                            if (currDate != prevDate) {
+                              separator = DateSeparator(date: message.sentAt);
+                            }
+                          }
+
+                          return Column(
+                            children: [
+                              if (separator != null) separator,
+                              MessageBubble(
+                                message: message,
+                                isMe: isMe,
+                                onLongPress: () =>
+                                    _showDeleteDialog(message.id),
+                              ),
+                            ],
+                          );
                         },
-                      );
-                    },
+                      ),
+
+                      // Scroll to bottom FAB
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: _showScrollFab
+                            ? GestureDetector(
+                                onTap: _scrollToBottom,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: PulseColors.primary,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: PulseColors.primary
+                                            .withOpacity(0.4),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
                   );
                 }
 
@@ -208,29 +272,16 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            decoration: BoxDecoration(
-              color: PulseColors.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, -3),
-                ),
-              ],
-            ),
-            child: ChatInputBar(
-              onSend: (content, mood, isMoodOverridden) {
-                context.read<ChatCubit>().sendMessage(
-                      chatId: widget.chatId,
-                      senderId: _currentUserId,
-                      content: content,
-                      mood: mood,
-                      isMoodOverridden: isMoodOverridden,
-                    );
-              },
-            ),
+          ChatInputBar(
+            onSend: (content, mood, isMoodOverridden) {
+              context.read<ChatCubit>().sendMessage(
+                    chatId: widget.chatId,
+                    senderId: _currentUserId,
+                    content: content,
+                    mood: mood,
+                    isMoodOverridden: isMoodOverridden,
+                  );
+            },
           ),
         ],
       ),
@@ -245,85 +296,5 @@ class _ChatPageState extends State<ChatPage> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
-  }
-
-  Widget _buildEmptyChatState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 78,
-              height: 78,
-              decoration: BoxDecoration(
-                color: PulseColors.primary.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.waving_hand_rounded,
-                size: 36,
-                color: PulseColors.primary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Start the conversation',
-              textAlign: TextAlign.center,
-              style: PulseTextStyles.bodyMedium.copyWith(
-                color: PulseColors.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Send a message and share how you feel.',
-              textAlign: TextAlign.center,
-              style: PulseTextStyles.bodyMedium.copyWith(
-                color: PulseColors.textHint,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.error_outline_rounded,
-              size: 48,
-              color: PulseColors.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Unable to load messages',
-              textAlign: TextAlign.center,
-              style: PulseTextStyles.bodyMedium.copyWith(
-                color: PulseColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: PulseTextStyles.bodyMedium.copyWith(
-                color: PulseColors.textHint,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

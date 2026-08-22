@@ -60,17 +60,20 @@ class ProfilePage extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor: PulseColors.surfaceVariant,
-                      backgroundImage:
-                          photoUrl != null ? NetworkImage(photoUrl) : null,
-                      child: photoUrl == null
-                          ? Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: PulseTextStyles.displayMedium,
-                            )
-                          : null,
+                    Hero(
+                      tag: 'profile_avatar',
+                      child: CircleAvatar(
+                        radius: 48,
+                        backgroundColor: PulseColors.surfaceVariant,
+                        backgroundImage:
+                            photoUrl != null ? NetworkImage(photoUrl) : null,
+                        child: photoUrl == null
+                            ? Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                style: PulseTextStyles.displayMedium,
+                              )
+                            : null,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Text(name, style: PulseTextStyles.headlineLarge),
