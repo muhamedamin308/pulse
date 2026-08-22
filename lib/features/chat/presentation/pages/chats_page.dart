@@ -8,6 +8,7 @@ import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/chat/presentation/bloc/chats_list_cubit.dart';
 import 'package:pulse/features/chat/presentation/widgets/chat_tile.dart';
+import 'package:pulse/features/chat/presentation/widgets/chat_tile_shimmer.dart';
 
 class ChatsPage extends StatefulWidget {
   const ChatsPage({super.key});
@@ -67,10 +68,11 @@ class _ChatsPageState extends State<ChatsPage> {
       body: BlocBuilder<ChatsListCubit, ChatsListState>(
         builder: (context, state) {
           if (state is ChatsListLoading) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: PulseColors.primary,
-              ),
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              itemCount: 6,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, __) => const ChatTileShimmer(),
             );
           }
 

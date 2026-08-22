@@ -7,6 +7,7 @@ import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
 import 'package:pulse/features/friends/presentation/bloc/friends_cubit.dart';
 import 'package:pulse/features/friends/presentation/widgets/friend_tile.dart';
+import 'package:pulse/features/friends/presentation/widgets/friend_tile_shimmer.dart';
 import 'package:pulse/features/friends/presentation/widgets/suggested_user_tile.dart';
 import 'package:pulse/config/di/injection.dart';
 import 'package:pulse/features/chat/domain/usecases/create_chat_usecase.dart';
@@ -69,10 +70,11 @@ class _FriendsPageState extends State<FriendsPage> {
       body: BlocBuilder<FriendsCubit, FriendsState>(
         builder: (context, state) {
           if (state is FriendsLoading) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: PulseColors.primary,
-              ),
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, __) => const FriendTileShimmer(),
             );
           }
 

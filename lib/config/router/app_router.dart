@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pulse/config/di/injection.dart';
@@ -19,71 +20,127 @@ import 'package:pulse/features/timeline/presentation/page/timeline_page.dart';
 
 part 'app_routes.dart';
 
+CustomTransitionPage _fadePage(Widget child) => CustomTransitionPage(
+    child: child,
+    transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+    transitionDuration: const Duration(milliseconds: 250));
+
+CustomTransitionPage _slidePage(Widget child) => CustomTransitionPage(
+      child: child,
+      transitionsBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        )),
+        child: child,
+      ),
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+
+CustomTransitionPage _scaleAndFadePage(Widget child) => CustomTransitionPage(
+      child: child,
+      transitionsBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+
 final appRouter = GoRouter(
   initialLocation: AppRoutes.splash,
-  debugLogDiagnostics: true,
+  debugLogDiagnostics: false,
   routes: [
     GoRoute(
       path: AppRoutes.splash,
       name: AppRoutes.splashName,
-      builder: (context, state) => const SplashPage(),
+      pageBuilder: (_, __) => _fadePage(const SplashPage()),
     ),
     GoRoute(
       path: AppRoutes.onboarding,
       name: AppRoutes.onboardingName,
-      builder: (context, state) => const OnboardingPage(),
+      pageBuilder: (_, __) => _fadePage(const OnboardingPage()),
     ),
     GoRoute(
       path: AppRoutes.login,
       name: AppRoutes.loginName,
-      builder: (context, state) => BlocProvider(
-        create: (_) => getIt<AuthCubit>(),
-        child: const LoginPage(),
+      pageBuilder: (_, __) => _fadePage(
+        BlocProvider(
+          create: (_) => getIt<AuthCubit>(),
+          child: const LoginPage(),
+        ),
       ),
     ),
     GoRoute(
       path: AppRoutes.register,
       name: AppRoutes.registerName,
-      builder: (context, state) => BlocProvider(
-        create: (_) => getIt<AuthCubit>(),
-        child: const RegisterPage(),
+      pageBuilder: (_, __) => _slidePage(
+        BlocProvider(
+          create: (_) => getIt<AuthCubit>(),
+          child: const RegisterPage(),
+        ),
       ),
     ),
     GoRoute(
       path: AppRoutes.home,
       name: AppRoutes.homeName,
-      builder: (context, state) => MultiBlocProvider(
-        providers: [
-          BlocProvider(create: (_) => getIt<FriendsCubit>()),
-          BlocProvider(create: (_) => getIt<ChatsListCubit>()),
-        ],
-        child: const HomePage(),
+      pageBuilder: (_, __) => _fadePage(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => getIt<FriendsCubit>()),
+            BlocProvider(create: (_) => getIt<ChatsListCubit>()),
+          ],
+          child: const HomePage(),
+        ),
       ),
     ),
     GoRoute(
       path: AppRoutes.search,
       name: AppRoutes.searchName,
-      builder: (context, state) => MultiBlocProvider(
-        providers: [
-          BlocProvider(create: (_) => getIt<SearchCubit>()),
-          BlocProvider.value(value: getIt<FriendsCubit>()),
-        ],
-        child: const SearchPage(),
+      pageBuilder: (_, __) => _slidePage(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => getIt<SearchCubit>()),
+            BlocProvider.value(value: getIt<FriendsCubit>()),
+          ],
+          child: const SearchPage(),
+        ),
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.profile,
+      name: AppRoutes.profileName,
+      pageBuilder: (_, __) => _scaleAndFadePage(const ProfilePage()),
     ),
     GoRoute(
       path: AppRoutes.chat,
       name: AppRoutes.chatName,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final chatId = state.pathParameters['chatId']!;
         final friendName = state.uri.queryParameters['friendName'] ?? '';
         final friendId = state.uri.queryParameters['friendId'] ?? '';
-        return BlocProvider(
-          create: (_) => getIt<ChatCubit>(),
-          child: ChatPage(
-            chatId: chatId,
-            friendName: friendName,
-            friendId: friendId,
+        return _slidePage(
+          BlocProvider(
+            create: (_) => getIt<ChatCubit>(),
+            child: ChatPage(
+              chatId: chatId,
+              friendName: friendName,
+              friendId: friendId,
+            ),
           ),
         );
       },
@@ -91,22 +148,19 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.timeline,
       name: AppRoutes.timelineName,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final chatId = state.pathParameters['chatId']!;
         final friendName = state.uri.queryParameters['friendName'] ?? '';
-        return BlocProvider(
-          create: (_) => getIt<TimelineCubit>(),
-          child: TimelinePage(
-            chatId: chatId,
-            friendName: friendName,
+        return _scaleAndFadePage(
+          BlocProvider(
+            create: (_) => getIt<TimelineCubit>(),
+            child: TimelinePage(
+              chatId: chatId,
+              friendName: friendName,
+            ),
           ),
         );
       },
-    ),
-    GoRoute(
-      path: AppRoutes.profile,
-      name: AppRoutes.profileName,
-      builder: (context, state) => const ProfilePage(),
     ),
   ],
 );
