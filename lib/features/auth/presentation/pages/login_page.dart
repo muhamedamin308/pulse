@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
 import 'package:pulse/core/constants/pulse_text_styles.dart';
+import 'package:pulse/core/widget/pulse_text_field.dart';
 import 'package:pulse/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:pulse/features/auth/presentation/widget/google_sign_in_button.dart';
-import 'package:pulse/shared/widget/pulse_text_field.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

@@ -34,6 +34,7 @@ void main() async {
 
   // Dependency Injection
   configureDependencies();
+  initRouter();
 
   // Notifications
   await getIt<NotificationService>().initialize();
@@ -54,6 +55,7 @@ class PulseApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: PulseTheme.dark,
       routerConfig: appRouter,
+      builder: (context, child) => child ?? const SizedBox.shrink(),
     );
   }
 }
