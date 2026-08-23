@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
-import 'package:pulse/shared/widget/shimmer_box.dart';
-import 'package:pulse/shared/widget/shimmer_circle.dart';
+import 'package:pulse/core/widget/shimmer_box.dart';
+import 'package:pulse/core/widget/shimmer_circle.dart';
 
 class ChatTileShimmer extends StatelessWidget {
   const ChatTileShimmer({super.key});

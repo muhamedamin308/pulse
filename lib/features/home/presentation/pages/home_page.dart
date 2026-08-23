@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_colors.dart';
@@ -144,14 +143,14 @@ class _AnimatedBottomNav extends StatelessWidget {
           child: Row(
             children: [
               _NavItem(
-                icon: Icons.chat_bubble_outline_rounded,
-                activeIcon: Icons.chat_bubble_rounded,
+                icon: Icons.chat_outlined,
+                activeIcon: Icons.chat_rounded,
                 label: 'Chats',
                 isActive: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.people_outline_rounded,
+                icon: Icons.people_outline,
                 activeIcon: Icons.people_rounded,
                 label: 'Friends',
                 isActive: currentIndex == 1,
@@ -198,7 +197,7 @@ class _NavItem extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: isActive
-                    ? PulseColors.primary.withOpacity(0.15)
+                    ? PulseColors.primary.withValues(alpha: 0.15)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
               ),

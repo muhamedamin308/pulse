@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pulse/config/di/injection.dart';
+import 'package:pulse/core/services/in_app_notification_manager.dart';
 import 'package:pulse/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:pulse/features/auth/presentation/pages/login_page.dart';
 import 'package:pulse/features/auth/presentation/pages/register_page.dart';
@@ -62,6 +63,7 @@ CustomTransitionPage _scaleAndFadePage(Widget child) => CustomTransitionPage(
     );
 
 final appRouter = GoRouter(
+  navigatorKey: getIt<InAppNotificationManager>().navigatorKey,
   initialLocation: AppRoutes.splash,
   debugLogDiagnostics: false,
   routes: [
@@ -164,3 +166,7 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+void initRouter() {
+  getIt<InAppNotificationManager>().router = appRouter;
+}

@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
+import 'package:pulse/config/di/injection.dart';
 import 'package:pulse/config/router/app_router.dart';
 import 'package:pulse/core/constants/pulse_constants.dart';
+import 'package:pulse/core/services/in_app_notification_manager.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -68,8 +70,33 @@ class NotificationService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('Forground message: ${message.notification?.title}');
-    // phase 7 step 3
+    final data = message.data;
+    final chatId = data['chatId'];
+    final friendId = data['senderId'] ?? '';
+    final friendName = data['friendName'] ?? 'Someone';
+    final senderName = message.notification?.title ?? friendName;
+    final body = message.notification?.body ?? '';
+
+    final moodEmoji = _extractEmoji(senderName);
+
+    if (chatId == null) return;
+
+    getIt<InAppNotificationManager>().show(
+        senderName: friendName,
+        message: body,
+        moodEmoji: moodEmoji,
+        chatId: chatId,
+        friendId: friendId);
+  }
+
+  String _extractEmoji(String text) {
+    final emojiRegex = RegExp(
+      r'[\u{1F300}-\u{1FFFF}]',
+      unicode: true,
+    );
+
+    final match = emojiRegex.firstMatch(text);
+    return match?.group(0) ?? '💬';
   }
 
   void _handleNotificationTap(RemoteMessage message) {
