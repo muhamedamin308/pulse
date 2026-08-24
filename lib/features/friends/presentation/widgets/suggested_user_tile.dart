@@ -103,10 +103,10 @@ class _SuggestedUserTileState extends State<SuggestedUserTile>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: PulseColors.success.withOpacity(0.15),
+                        color: PulseColors.success.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: PulseColors.success.withOpacity(0.5),
+                          color: PulseColors.success.withValues(alpha: 0.5),
                         ),
                       ),
                       child: Row(

@@ -59,6 +59,10 @@ class MoodSelector extends StatelessWidget {
                 children: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: child,
+                    ),
                     child: Text(
                       mood.emoji,
                       key: ValueKey(isSelected),

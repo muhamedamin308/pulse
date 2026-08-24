@@ -18,10 +18,21 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   final _searchController = TextEditingController();
   final _currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  final _focusNode = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    });
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -122,14 +133,30 @@ class _SearchPageState extends State<SearchPage> {
                       itemBuilder: (context, index) {
                         final user = state.results[index];
 
-                        return SuggestedUserTile(
-                          user: user,
-                          onAdd: () {
-                            context.read<FriendsCubit>().addFriend(
-                                  currentUserId: _currentUserId,
-                                  targetUserId: user.uid,
-                                );
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: Duration(
+                            milliseconds: 220 + (index * 40).clamp(0, 300),
+                          ),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, (1 - value) * 12),
+                                child: child,
+                              ),
+                            );
                           },
+                          child: SuggestedUserTile(
+                            user: user,
+                            onAdd: () {
+                              context.read<FriendsCubit>().addFriend(
+                                    currentUserId: _currentUserId,
+                                    targetUserId: user.uid,
+                                  );
+                            },
+                          ),
                         );
                       },
                     );
@@ -146,53 +173,72 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildSearchField() {
-    return TextField(
-      controller: _searchController,
-      autofocus: true,
-      style: PulseTextStyles.bodyMedium.copyWith(
-        color: PulseColors.textPrimary,
-      ),
-      onChanged: (query) {
-        context.read<SearchCubit>().searchUsers(query);
-        setState(() {});
-      },
-      decoration: InputDecoration(
-        hintText: 'Search by name...',
-        hintStyle: PulseTextStyles.bodyMedium.copyWith(
-          color: PulseColors.textHint,
-        ),
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          color: PulseColors.primary,
-        ),
-        suffixIcon: _searchController.text.isEmpty
-            ? null
-            : IconButton(
-                icon: const Icon(
-                  Icons.close_rounded,
-                  color: PulseColors.textHint,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: PulseColors.primary.withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
                 ),
-                onPressed: _clearSearch,
-              ),
-        filled: true,
-        fillColor: PulseColors.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
+              ]
+            : [],
+      ),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _focusNode,
+        autofocus: true,
+        style: PulseTextStyles.bodyMedium.copyWith(
+          color: PulseColors.textPrimary,
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: PulseColors.primary,
-            width: 1.5,
+        onChanged: (query) {
+          context.read<SearchCubit>().searchUsers(query);
+          setState(() {});
+        },
+        decoration: InputDecoration(
+          hintText: 'Search by name...',
+          hintStyle: PulseTextStyles.bodyMedium.copyWith(
+            color: PulseColors.textHint,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: _isFocused ? PulseColors.primary : PulseColors.textHint,
+          ),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: PulseColors.textHint,
+                  ),
+                  onPressed: _clearSearch,
+                ),
+          filled: true,
+          fillColor: PulseColors.surface,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide:
+                BorderSide(color: PulseColors.divider.withValues(alpha: 0.6)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide:
+                BorderSide(color: PulseColors.divider.withValues(alpha: 0.6)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(
+              color: PulseColors.primary,
+              width: 1.5,
+            ),
           ),
         ),
       ),
@@ -214,11 +260,18 @@ class _SearchPageState extends State<SearchPage> {
               width: 76,
               height: 76,
               decoration: BoxDecoration(
-                color: PulseColors.primary.withValues(alpha: 0.12),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    PulseColors.primary.withValues(alpha: 0.18),
+                    PulseColors.primary.withValues(alpha: 0.06),
+                  ],
+                ),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.people_outline_rounded,
+              child: Icon(
+                icon,
                 size: 36,
                 color: PulseColors.primary,
               ),

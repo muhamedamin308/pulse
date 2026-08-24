@@ -117,15 +117,15 @@ class FriendsRemoteDataSourceImpl implements FriendsRemoteDataSource {
   @override
   Future<List<FriendModel>> searchUsers(String query) async {
     try {
-      final snapshot = await _firestore
-          .collection(PulseConstants.usersCollection)
-          .where('name', isGreaterThanOrEqualTo: query)
-          .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(20)
-          .get();
+      final lowerQuery = query.toLowerCase();
+
+      final snapshot =
+          await _firestore.collection(PulseConstants.usersCollection).get();
 
       return snapshot.docs
           .map((doc) => FriendModel.fromFirestore(doc))
+          .where((user) => user.name.toLowerCase().contains(lowerQuery))
+          .take(20)
           .toList();
     } catch (e) {
       throw ServerException(e.toString());

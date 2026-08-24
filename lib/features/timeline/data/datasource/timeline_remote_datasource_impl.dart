@@ -56,7 +56,6 @@ class TimelineRemoteDatasourceImpl implements TimelineRemoteDataSource {
           totalMessages: dataPoints.length,
           dominantMood: dominantMood);
     } catch (e) {
-      print('Timeline ERROR: $e');
       throw ServerException(e.toString());
     }
   }

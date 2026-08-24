@@ -67,7 +67,6 @@ Examples:
 
     // Step 1 — Keyword scoring
     final scores = _scoreAll(trimmed);
-    print('📊 Scores: $scores');
 
     final bestEntry =
         scores.entries.reduce((a, b) => a.value > b.value ? a : b);
